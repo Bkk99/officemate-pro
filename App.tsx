@@ -1,0 +1,126 @@
+
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { LoginPage } from './features/auth/LoginPage';
+import { MainLayout, ProtectedRoute } from './components/Layout';
+import { DashboardPage } from './features/dashboard/DashboardPage';
+import { EmployeePage } from './features/employee/EmployeePage';
+import { InventoryPage } from './features/inventory/InventoryPage';
+import { PurchaseOrderPage } from './features/po/PurchaseOrderPage';
+import { DocumentPage } from './features/documents/DocumentPage';
+import { ChatPage } from './features/chat/ChatPage';
+import { CalendarPage } from './features/calendar/CalendarPage';
+import { ReportPage } from './features/reports/ReportPage';
+import { UserManagementPage } from './features/admin/UserManagementPage';
+import { PayrollPage } from './features/payroll/PayrollPage';
+import { PayrollRunDetailsPage } from './features/payroll/PayrollRunDetailsPage';
+import { PayrollSettingsPage } from './features/payroll/PayrollSettingsPage';
+import { FingerprintScannerSettingsPage } from './features/admin/FingerprintScannerSettingsPage';
+import { LeaveManagementPage } from './features/leave/LeaveManagementPage'; 
+import { EmployeeIdCardPage } from './features/idcard/EmployeeIdCardPage'; // New Import
+import { UserRole } from './types';
+import { useAuth } from './contexts/AuthContext';
+import { DEPARTMENTS } from './constants';
+
+
+const App: React.FC = () => {
+  const { user } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <MainLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="employees" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
+            <EmployeePage />
+          </ProtectedRoute>
+        } />
+        <Route path="employee-cards" element={ // New Route for Employee ID Cards
+          <ProtectedRoute 
+            allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}
+            hrStaffOverride={true} // HR Staff can access
+          >
+            <EmployeeIdCardPage />
+          </ProtectedRoute>
+        } />
+        <Route path="leave-management" element={ 
+          <ProtectedRoute 
+            allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}
+            hrStaffOverride={true} 
+          >
+            <LeaveManagementPage />
+          </ProtectedRoute>
+        } />
+        <Route path="inventory" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <InventoryPage />
+          </ProtectedRoute>
+        } />
+        <Route path="purchase-orders" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
+            <PurchaseOrderPage />
+          </ProtectedRoute>
+        } />
+        <Route path="documents" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <DocumentPage />
+          </ProtectedRoute>
+        } />
+        <Route path="payroll" >
+            <Route index element={
+                <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+                    <PayrollPage />
+                </ProtectedRoute>
+            } />
+            <Route path=":runId" element={
+                 <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+                    <PayrollRunDetailsPage />
+                </ProtectedRoute>
+            }/>
+            <Route path="settings" element={
+                <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                    <PayrollSettingsPage />
+                </ProtectedRoute>
+            }/>
+        </Route>
+        <Route path="chat" element={
+         <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <ChatPage />
+          </ProtectedRoute>
+        } />
+        <Route path="calendar" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <CalendarPage />
+          </ProtectedRoute>
+        } />
+        <Route path="reports" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
+            <ReportPage />
+          </ProtectedRoute>
+        } />
+        <Route path="admin/users" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+            <UserManagementPage />
+          </ProtectedRoute>
+        } />
+        <Route path="admin/fingerprint-scanner" element={ 
+            <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <FingerprintScannerSettingsPage />
+            </ProtectedRoute>
+        } />
+         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Route>
+    </Routes>
+  );
+};
+
+export default App;

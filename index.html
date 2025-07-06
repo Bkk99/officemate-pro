@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ออฟฟิศเมท คู่ใจบริการ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {"50":"#fff5f7","100":"#ffeef2","200":"#fedde7","300":"#fecbd9","400":"#fdaac9","500":"#fc88b8","600":"#FB6F92","700":"#f4567f","800":"#e4426b","900":"#cc335c","950":"#a52346"},
+              secondary: {"50":"#f9fafb","100":"#f3f4f6","200":"#e5e7eb","300":"#d1d5db","400":"#9ca3af","500":"#6b7280","600":"#4b5563","700":"#374151","800":"#1f2937","900":"#111827","950":"#030712"}
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.6.2",
+    "recharts": "https://esm.sh/recharts@^2.15.3"
+  }
+}
+</script>
+<style>
+  .marquee-banner {
+    background-color: #FB6F92; /* primary-600 from your tailwind config */
+    color: white;
+    padding: 8px 0;
+    overflow: hidden;
+    white-space: nowrap;
+    box-sizing: border-box;
+    font-size: 0.875rem; /* text-sm */
+    line-height: 1.25rem; /* leading-tight */
+    z-index: 15; /* Ensure it's above content but below modals typically */
+  }
+  .marquee-content {
+    display: inline-block;
+    padding-left: 100%; 
+    animation: marquee 25s linear infinite; /* Adjust duration based on typical text length */
+  }
+  .marquee-content:hover { /* Optional: pause on hover */
+    animation-play-state: paused;
+  }
+  @keyframes marquee {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+</style>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-secondary-100">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
