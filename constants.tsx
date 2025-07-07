@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { UserRole, Employee, PurchaseOrder, Document, DocumentType, PayrollRunStatus, TaxBracket, PayrollComponent, LeaveType, LeaveRequestStatus } from './types';
+import { UserRole, Employee, PurchaseOrder, Document, DocumentType, PayrollRunStatus, TaxBracket, PayrollComponent, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus } from './types';
 
 // Heroicon SVGs (outline style)
 const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -63,9 +63,15 @@ const BanknotesIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+const WalletIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 12m18 0v6.25a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18.25V12m18 0V5.75A2.25 2.25 0 0018.75 3.5H5.25A2.25 2.25 0 003 5.75v.5M21 12a2.25 2.25 0 00-2.25-2.25H5.25a2.25 2.25 0 00-2.25 2.25m18 0v6.25a2.25 2.25 0 01-2.25 2.25H5.25a2.25 2.25 0 01-2.25-2.25V12M9 12.75a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+    </svg>
+);
+
 const CogSettingsIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.11v1.093c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.27.96-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.78.93l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.149-.894c-.07-.424-.384-.764-.78-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-.96.27-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.272-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.11v-1.094c0-.55.398-1.019.94-1.11l.894-.149c.424-.07.764-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773c.39-.39.902-.44 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.93l.149-.894z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.11v1.093c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.27.96-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.78.93l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.149-.894c-.07-.424-.384-.764-.78-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-.96.27-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.272.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.11v-1.094c0-.55.398-1.019.94-1.11l.894-.149c.424-.07.764-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773c.39-.39.902-.44 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.93l.149-.894z" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
@@ -90,6 +96,12 @@ const CreditCardIcon = (props: React.SVGProps<SVGSVGElement>) => ( // Icon for E
   </svg>
 );
 
+export const SparklesIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.572L16.5 21.75l-.398-1.178a3.375 3.375 0 00-2.455-2.456L12.75 18l1.178-.398a3.375 3.375 0 002.455-2.456L16.5 14.25l.398 1.178a3.375 3.375 0 002.456 2.456L20.25 18l-1.178.398a3.375 3.375 0 00-2.456 2.456z" />
+  </svg>
+);
+
 
 export interface NavItem {
   name: string;
@@ -108,6 +120,7 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'ใบสั่งซื้อ (PO)', path: '/purchase-orders', icon: ShoppingCartIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
   { name: 'จัดการเอกสาร', path: '/documents', icon: DocumentTextIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
   { name: 'ระบบบัญชีเงินเดือน', path: '/payroll', icon: BanknotesIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
+  { name: 'เบิกเงินล่วงหน้า', path: '/cash-advance', icon: WalletIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
   { name: 'แชทภายในองค์กร', path: '/chat', icon: ChatBubbleLeftRightIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
   { name: 'ปฏิทินองค์กร', path: '/calendar', icon: CalendarDaysIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
   { name: 'รายงาน', path: '/reports', icon: ChartBarIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
@@ -176,7 +189,9 @@ export const DOCUMENT_STATUSES: Document['status'][] = ['Draft', 'Sent', 'Paid',
 export const STOCK_TRANSACTION_REASONS = ["สต็อกเริ่มต้น", "รับสินค้าจากการซื้อ", "คำสั่งซื้อจากลูกค้า", "ใช้ภายในองค์กร", "สินค้าเสียหาย/หมดอายุ", "ปรับปรุงสต็อก", "รับคืนสินค้า", "เบิกใช้ภายใน", "เบิกสำหรับโครงการ"];
 export const STOCK_TRANSACTION_TYPES_TH = {'IN': 'รับเข้า', 'OUT': 'จ่ายออก'};
 
+export const AI_ASSISTANT_ROOM_ID = 'ai-assistant';
 export const CHAT_ROOMS_SAMPLE = [
+  { id: AI_ASSISTANT_ROOM_ID, name: 'AI Assistant', icon: SparklesIcon },
   { id: 'general', name: 'ห้องสนทนาทั่วไป' },
   { id: 'project-phoenix', name: 'อัปเดตโปรเจกต์ฟีนิกซ์' },
   { id: 'sales-team', name: 'ช่องทางทีมขาย' },
@@ -274,4 +289,22 @@ export const LEAVE_REQUEST_STATUS_COLORS: Record<LeaveRequestStatus, string> = {
   [LeaveRequestStatus.APPROVED]: 'bg-green-100 text-green-800',
   [LeaveRequestStatus.REJECTED]: 'bg-red-100 text-red-800',
   [LeaveRequestStatus.CANCELLED]: 'bg-gray-100 text-gray-800',
+};
+
+// --- Cash Advance Constants ---
+export const CASH_ADVANCE_REASONS = ["ค่าเดินทาง/ที่พัก", "ค่ารักษาพยาบาลฉุกเฉิน", "ค่าใช้จ่ายส่วนตัวเร่งด่วน", "ค่ารับรองลูกค้า", "อื่นๆ (โปรดระบุ)"];
+
+export const CASH_ADVANCE_STATUS_TH: Record<CashAdvanceRequestStatus, string> = {
+  [CashAdvanceRequestStatus.PENDING]: 'รอดำเนินการ',
+  [CashAdvanceRequestStatus.APPROVED]: 'อนุมัติแล้ว',
+  [CashAdvanceRequestStatus.REJECTED]: 'ปฏิเสธ',
+  [CashAdvanceRequestStatus.PAID]: 'จ่ายแล้ว',
+};
+export const CASH_ADVANCE_STATUS_OPTIONS = (Object.values(CashAdvanceRequestStatus)).map(status => ({ value: status, label: CASH_ADVANCE_STATUS_TH[status] }));
+
+export const CASH_ADVANCE_STATUS_COLORS: Record<CashAdvanceRequestStatus, string> = {
+  [CashAdvanceRequestStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+  [CashAdvanceRequestStatus.APPROVED]: 'bg-blue-100 text-blue-800',
+  [CashAdvanceRequestStatus.REJECTED]: 'bg-red-100 text-red-800',
+  [CashAdvanceRequestStatus.PAID]: 'bg-green-100 text-green-800',
 };

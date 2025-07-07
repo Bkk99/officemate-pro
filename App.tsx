@@ -18,6 +18,7 @@ import { PayrollSettingsPage } from './features/payroll/PayrollSettingsPage';
 import { FingerprintScannerSettingsPage } from './features/admin/FingerprintScannerSettingsPage';
 import { LeaveManagementPage } from './features/leave/LeaveManagementPage'; 
 import { EmployeeIdCardPage } from './features/idcard/EmployeeIdCardPage'; // New Import
+import { CashAdvancePage } from './features/cash-advance/CashAdvancePage'; // New Import
 import { UserRole } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { DEPARTMENTS } from './constants';
@@ -92,6 +93,11 @@ const App: React.FC = () => {
                 </ProtectedRoute>
             }/>
         </Route>
+        <Route path="cash-advance" element={
+          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+            <CashAdvancePage />
+          </ProtectedRoute>
+        } />
         <Route path="chat" element={
          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
             <ChatPage />

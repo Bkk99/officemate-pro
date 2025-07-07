@@ -1,0 +1,21 @@
+{
+  "short_name": "Officemate",
+  "name": "Officemate Pro",
+  "description": "A comprehensive office management application for handling employees, inventory, purchase orders, documents, chat, calendar, reports, and user administration.",
+  "icons": [
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#FB6F92",
+  "background_color": "#ffeef2"
+}

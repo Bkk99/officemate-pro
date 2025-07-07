@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
@@ -320,4 +321,28 @@ export interface LeaveRequest {
   notes?: string; // Notes by approver or HR
   // For UI, might add calculated duration
   durationInDays?: number;
+}
+
+// --- Cash Advance Types ---
+export enum CashAdvanceRequestStatus {
+  PENDING = 'Pending',
+  APPROVED = 'Approved',
+  REJECTED = 'Rejected',
+  PAID = 'Paid', // After approval, HR/Finance marks it as paid
+}
+
+export interface CashAdvanceRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string; 
+  employeeCode?: string;
+  requestDate: string; // ISO Date String
+  amount: number;
+  reason: string;
+  status: CashAdvanceRequestStatus;
+  approverId?: string; 
+  approverName?: string;
+  approvalDate?: string; // ISO Date String
+  notes?: string; // Notes by approver or HR
+  paymentDate?: string; // When the cash was actually given
 }
