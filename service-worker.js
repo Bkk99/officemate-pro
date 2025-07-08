@@ -1,4 +1,3 @@
-
 const CACHE_NAME = 'officemate-pro-cache-v1';
 const urlsToCache = [
   '/',
