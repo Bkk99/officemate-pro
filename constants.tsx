@@ -1,6 +1,15 @@
 
 import React from 'react';
-import { Employee, PurchaseOrder, Document, DocumentType, PayrollRunStatus, TaxBracket, PayrollComponent, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeStatusKey, POStatusKey, DocumentStatusKey } from './types';
+import { Employee, PurchaseOrder, Document, DocumentType, PayrollRunStatus, TaxBracket, PayrollComponent, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeStatusKey, POStatusKey, DocumentStatusKey, UserRole } from './types';
+
+// Define NavItem type if not already defined in types.ts
+export type NavItem = {
+  name: string;
+  path: string;
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  allowedRoles: UserRole[];
+  subItems?: NavItem[];
+};
 
 // Heroicon SVGs (outline style)
 const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -112,10 +121,6 @@ const CubeIcon = (props: React.SVGProps<SVGSVGElement>) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
     </svg>
 );
-  icon: (props: React.SVGProps<SVGSVGElement>) => JSX.Element;
-  allowedRoles: UserRole[];
-  subItems?: NavItem[]; 
-}
 
 export const NAV_ITEMS: NavItem[] = [
   { name: 'แดชบอร์ด', path: '/dashboard', icon: HomeIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
