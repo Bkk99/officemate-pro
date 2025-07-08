@@ -3,8 +3,7 @@ import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, Emplo
 import { 
     getEmployees, addEmployee, updateEmployee, deleteEmployee, 
     addTimeLog, getEmployeeTimeLogs, getPayrollComponents,
-    saveSetting, getSetting,
-    getUserProfile
+    saveSetting, getSetting
 } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -74,9 +73,6 @@ export const EmployeePage: React.FC = () => {
 
   const [isSyncingScanner, setIsSyncingScanner] = useState(false);
   const [scannerSyncMessage, setScannerSyncMessage] = useState<string | null>(null);
-  const [createAccount, setCreateAccount] = useState(false);
-  const [accountDetails, setAccountDetails] = useState({ username: '', password: '' });
-  const [hasUserAccount, setHasUserAccount] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -98,20 +94,14 @@ export const EmployeePage: React.FC = () => {
     fetchAllData();
   }, [fetchAllData]);
 
-  const handleOpenModal = async (employee?: Employee) => {
+  const handleOpenModal = (employee?: Employee) => {
     if (employee) {
       setCurrentEmployee(employee);
       setEditingEmployeeId(employee.id);
-      const profile = await getUserProfile(employee.id);
-      setHasUserAccount(!!profile);
-      setAccountDetails({ username: profile?.username || employee.email, password: ''});
     } else {
       setCurrentEmployee({...initialEmployeeState, profileImageUrl: `https://picsum.photos/seed/${Date.now()}/200/200`});
       setEditingEmployeeId(null);
-      setAccountDetails({ username: '', password: ''});
-      setHasUserAccount(false);
     }
-    setCreateAccount(false);
     setActiveTab('details');
     setIsModalOpen(true);
   };
@@ -132,11 +122,6 @@ export const EmployeePage: React.FC = () => {
     }
   };
   
-  const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setAccountDetails(prev => ({ ...prev, [name]: value }));
-  };
-
   const handleRecurringItemChange = (type: 'allowance' | 'deduction', index: number, field: 'payrollComponentId' | 'amount', value: string | number) => {
     setCurrentEmployee(prev => {
         const items = type === 'allowance' ? [...(prev.recurringAllowances || [])] : [...(prev.recurringDeductions || [])];
@@ -167,7 +152,6 @@ export const EmployeePage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    // Note: Creating user accounts via client-side is disabled for security. This should be done in Supabase dashboard.
     try {
         if (editingEmployeeId) {
             await updateEmployee(currentEmployee as Employee);
@@ -375,14 +359,9 @@ export const EmployeePage: React.FC = () => {
                 </div>
             </div>
         )}
-        {user?.role === UserRole.ADMIN && !hasUserAccount && (
+        {user?.role === UserRole.ADMIN && (
             <div className="mt-4 p-4 bg-yellow-50 rounded-lg text-sm text-yellow-800">
-                <strong>หมายเหตุ:</strong> หากต้องการสร้างบัญชีผู้ใช้สำหรับพนักงานคนนี้ กรุณาไปที่ Supabase Dashboard ของคุณในส่วน Authentication {'>'} Users.
-            </div>
-        )}
-        {user?.role === UserRole.ADMIN && hasUserAccount && (
-            <div className="mt-4 p-4 bg-green-50 rounded-lg text-sm text-green-800">
-                <strong>บัญชีผู้ใช้:</strong> พนักงานคนนี้มีบัญชีผู้ใช้ในระบบแล้ว ({accountDetails.username}).
+                <strong>หมายเหตุ:</strong> หากต้องการสร้างหรือตรวจสอบบัญชีผู้ใช้สำหรับพนักงานคนนี้ กรุณาไปที่ Supabase Dashboard ของคุณในส่วน Authentication &gt; Users และตาราง `profiles`
             </div>
         )}
         <div className="mt-6 flex justify-end space-x-2">

@@ -1,7 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { User } from '../types';
-import { getUserProfile } from '../services/api';
+import { User, UserRole } from '../types';
 import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -20,29 +19,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchAndSetUserProfile = async (session: Session | null) => {
     if (session?.user) {
-        try {
-            const profile = await getUserProfile(session.user.id);
-            if (profile) {
-                 setUser({
-                    id: profile.id,
-                    username: profile.username,
-                    role: profile.role,
-                    name: profile.full_name, // Make sure your profiles table has `full_name`
-                    department: profile.department
-                });
-            } else {
-                 // Handle case where user exists in auth but not in profiles table
-                 console.warn(`No profile found for user ID: ${session.user.id}`);
-                 setUser(null);
-            }
-        } catch (error) {
-            console.error("Error fetching user profile:", error);
-            setUser(null);
-        }
+        const authUser = session.user;
+        // This is a workaround for a potential database error (function get_my_claim does not exist)
+        // by fetching user details from the JWT metadata instead of the 'profiles' table.
+        // This assumes the user's role and department are stored in `app_metadata` and name in `user_metadata`.
+        const role = authUser.app_metadata?.role as UserRole || UserRole.STAFF;
+        const name = authUser.user_metadata?.full_name || authUser.email || 'User';
+        const department = authUser.app_metadata?.department;
+
+        setUser({
+            id: authUser.id,
+            username: authUser.email || '',
+            role,
+            name,
+            department,
+        });
     } else {
         setUser(null);
     }
-     setIsLoading(false);
+    setIsLoading(false);
   };
 
   useEffect(() => {
