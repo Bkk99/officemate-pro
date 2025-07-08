@@ -6,7 +6,7 @@ import { Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password_DUMMY: string) => Promise<{ success: boolean; error: string | null }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error: string | null }>;
   logout: () => void;
   isLoading: boolean;
   updateUserContext: (updatedUser: User) => void;
@@ -64,26 +64,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = useCallback(async (email: string, password_DUMMY: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
     setIsLoading(true);
-    
-    // In a real scenario, you'd use a real password.
-    // Here we'll allow login with a dummy password if one is not provided, 
-    // useful for testing with Supabase's magic links or social auth if you add it.
-    const passwordToUse = password_DUMMY || '123456'; // Default password for safety
 
     const { error } = await supabase.auth.signInWithPassword({
         email: email,
-        password: passwordToUse,
+        password: password,
     });
-    
+
     setIsLoading(false);
 
     if (error) {
         console.error("Supabase login error:", error.message);
         return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
     }
+
     return { success: true, error: null };
   }, []);
 
