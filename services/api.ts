@@ -1,7 +1,7 @@
 
 // services/api.ts
 import { supabase } from '../lib/supabaseClient';
-import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, EmployeeStatusKey, POStatusKey, DocumentStatusKey, DocumentType, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeAllowance, EmployeeDeduction, PayslipItem } from '../types';
+import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, EmployeeStatusKey, POStatusKey, DocumentStatusKey, DocumentType, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeAllowance, EmployeeDeduction, PayslipItem, ManagedUser, UserRole } from '../types';
 import { Database } from '../types';
 
 // --- Type Aliases for DB Rows ---
@@ -18,6 +18,7 @@ type PayslipRow = Database['public']['Tables']['payslips']['Row'];
 type LeaveRequestRow = Database['public']['Tables']['leave_requests']['Row'];
 type ChatMessageRow = Database['public']['Tables']['chat_messages']['Row'];
 type CashAdvanceRequestRow = Database['public']['Tables']['cash_advance_requests']['Row'];
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 
 
 // Helper function to handle Supabase errors
@@ -465,4 +466,34 @@ export const saveSetting = async (key: string, value: any): Promise<void> => {
     const dbData: Database['public']['Tables']['settings']['Insert'] = { key, value: value as unknown as Json };
     const { error } = await supabase.from('settings').upsert([dbData]);
     if (error) handleSupabaseError({ data: null, error }, 'saveSetting');
+};
+
+// --- New User Management Functions for Admins ---
+
+const mapProfileToManagedUser = (p: ProfileRow): ManagedUser => ({
+  id: p.id,
+  full_name: p.full_name,
+  username: p.username,
+  role: p.role as UserRole,
+  department: p.department,
+  updated_at: p.updated_at,
+});
+
+export const getManagedUsers = async (): Promise<ManagedUser[]> => {
+    if (!supabase) return [];
+    // This query relies on the RLS policy for Admins being in place.
+    const { data, error } = await supabase.from('profiles').select('*').order('username', { ascending: true });
+    const profiles = handleSupabaseError({ data, error }, 'getManagedUsers') || [];
+    return profiles.map(mapProfileToManagedUser);
+};
+
+export const updateUserRole = async (userId: string, role: UserRole): Promise<ManagedUser> => {
+    if (!supabase) throw new Error("Supabase client not initialized");
+    const { data, error } = await supabase
+        .from('profiles')
+        .update({ role: role, updated_at: new Date().toISOString() })
+        .eq('id', userId)
+        .select()
+        .single();
+    return mapProfileToManagedUser(handleSupabaseError({ data, error }, 'updateUserRole'));
 };

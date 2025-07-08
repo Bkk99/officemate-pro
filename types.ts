@@ -1,4 +1,5 @@
 
+
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
@@ -349,6 +350,17 @@ export interface CashAdvanceRequest {
   approvalDate?: string; // ISO Date String
   notes?: string; // Notes by approver or HR
   paymentDate?: string; // When the cash was actually given
+}
+
+
+// --- New type for User Management Page ---
+export interface ManagedUser {
+  id: string;
+  full_name: string | null;
+  username: string | null; // This will hold the email
+  role: UserRole | null;
+  department: string | null;
+  updated_at: string | null;
 }
 
 
