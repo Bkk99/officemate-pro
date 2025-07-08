@@ -1,5 +1,6 @@
-import { User, UserRole, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, DocumentType, CalendarEvent, PayrollRun, Payslip, PayrollRunStatus, TaxBracket, PayslipItem, EmployeeAllowance, EmployeeDeduction, PayrollComponent, EditPayslipFormData, FingerprintScannerSettings, LeaveRequest, LeaveType, LeaveRequestStatus, ChatMessage } from '../types';
-import { DEPARTMENTS, POSITIONS, EMPLOYEE_STATUSES, PO_STATUSES, DOCUMENT_TYPES_ARRAY, DOCUMENT_STATUSES, STOCK_TRANSACTION_REASONS as INITIAL_STOCK_REASONS, SOCIAL_SECURITY_RATE, SOCIAL_SECURITY_CAP_MONTHLY_SALARY, SOCIAL_SECURITY_MIN_MONTHLY_SALARY, CURRENT_YEAR, STANDARD_DEDUCTION_ANNUAL, PERSONAL_ALLOWANCE_ANNUAL, MOCK_TAX_BRACKETS_SIMPLIFIED, DEFAULT_PAYROLL_COMPONENTS, MONTH_OPTIONS, LEAVE_TYPES_TH, CHAT_ROOMS_SAMPLE } from '../constants';
+
+import { User, UserRole, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, DocumentType, CalendarEvent, PayrollRun, Payslip, PayrollRunStatus, TaxBracket, PayslipItem, EmployeeAllowance, EmployeeDeduction, PayrollComponent, EditPayslipFormData, FingerprintScannerSettings, LeaveRequest, LeaveType, LeaveRequestStatus, ChatMessage, CashAdvanceRequest, CashAdvanceRequestStatus } from '../types';
+import { DEPARTMENTS, POSITIONS, EMPLOYEE_STATUSES, PO_STATUSES, DOCUMENT_TYPES_ARRAY, DOCUMENT_STATUSES, STOCK_TRANSACTION_REASONS as INITIAL_STOCK_REASONS, SOCIAL_SECURITY_RATE, SOCIAL_SECURITY_CAP_MONTHLY_SALARY, SOCIAL_SECURITY_MIN_MONTHLY_SALARY, CURRENT_YEAR, STANDARD_DEDUCTION_ANNUAL, PERSONAL_ALLOWANCE_ANNUAL, MOCK_TAX_BRACKETS_SIMPLIFIED, DEFAULT_PAYROLL_COMPONENTS, MONTH_OPTIONS, LEAVE_TYPES_TH, CHAT_ROOMS_SAMPLE, AI_ASSISTANT_ROOM_ID } from '../constants';
 import { dispatchChatNotification } from './notificationService'; // Added import
 
 // --- Users ---
@@ -42,6 +43,8 @@ const defaultEmployeeAllowances: EmployeeAllowance[] = [
 ];
 
 export let MOCK_EMPLOYEES: Employee[] = [
+  { id: 'user1-emp', employeeCode: 'E0000', name: 'ผู้ดูแลระบบ', nameEn: 'System Admin', email: 'admin@example.com', phone: '080-000-0000', department: DEPARTMENTS[5], position: POSITIONS[0], status: 'Active', hireDate: '2020-01-01', profileImageUrl: 'https://picsum.photos/seed/admin/200/200', fingerprintScannerId: 'FP999',
+    baseSalary: 80000, bankName: 'ธนาคารกสิกรไทย', bankAccountNumber: '000-0-00000-0', taxId: '1100000000000', socialSecurityNumber: '0123456789', providentFundRateEmployee: 5, providentFundRateEmployer: 5, recurringAllowances: [], recurringDeductions: []},
   { id: 'emp1', employeeCode: 'E0001', name: 'อลิซ วันเดอร์แลนด์', nameEn: 'Alice Wonderland', email: 'alice@example.com', phone: '081-234-5678', department: DEPARTMENTS[0], position: POSITIONS[0], status: 'Active', hireDate: '2022-01-15', profileImageUrl: 'https://picsum.photos/seed/alice/200/200', contractUrl: '#', fingerprintScannerId: 'FP001', passportNumber: 'AB1234567', passportExpiryDate: '2028-12-31',
     baseSalary: 50000, bankName: 'ธนาคารกสิกรไทย', bankAccountNumber: '123-4-56789-0', taxId: '1100000000001', socialSecurityNumber: '1234567890', providentFundRateEmployee: 3, providentFundRateEmployer: 3, recurringAllowances: defaultEmployeeAllowances, recurringDeductions: [] },
   { id: 'emp2', employeeCode: 'E0002', name: 'บ็อบ เดอะบิวเดอร์', nameEn: 'Bob Thebuilder', email: 'bob@example.com', phone: '082-345-6789', department: DEPARTMENTS[2], position: POSITIONS[1], status: 'Active', hireDate: '2021-07-20', profileImageUrl: 'https://picsum.photos/seed/bob/200/200', fingerprintScannerId: 'FP002', passportNumber: 'CD8901234', passportExpiryDate: '2027-06-15',
@@ -101,13 +104,19 @@ export let MOCK_EMPLOYEES: Employee[] = [
     recurringDeductions: [] 
   },
 ];
-export const addEmployee = (employeeData: Omit<Employee, 'id'>): Employee => {
-  const newEmployee: Employee = { ...employeeData, id: `emp${MOCK_EMPLOYEES.length + 1 + Math.floor(Math.random()*1000)}`, employeeCode: `E${String(MOCK_EMPLOYEES.length + 1).padStart(4,'0')}` };
+export const addEmployee = (employeeData: Omit<Employee, 'id'>, newId?: string): Employee => {
+  const employeeId = newId || `emp${MOCK_EMPLOYEES.length + 1 + Math.floor(Math.random()*1000)}`;
+  const newEmployee: Employee = { 
+    ...employeeData, 
+    id: employeeId,
+    employeeCode: employeeData.employeeCode || `E${String(MOCK_EMPLOYEES.length + 1).padStart(4,'0')}` 
+  };
   MOCK_EMPLOYEES.push(newEmployee);
   return newEmployee;
 };
-export const updateEmployee = (updatedEmployee: Employee): Employee | null => {
-  const index = MOCK_EMPLOYEES.findIndex(e => e.id === updatedEmployee.id);
+export const updateEmployee = (updatedEmployee: Employee, oldId?: string): Employee | null => {
+  const findId = oldId || updatedEmployee.id;
+  const index = MOCK_EMPLOYEES.findIndex(e => e.id === findId);
   if (index !== -1) {
     MOCK_EMPLOYEES[index] = { ...MOCK_EMPLOYEES[index], ...updatedEmployee };
     return MOCK_EMPLOYEES[index];
@@ -173,6 +182,10 @@ export let MOCK_INVENTORY_ITEMS: InventoryItem[] = [
   { id: 'item3', name: 'แฟ้มสันกว้าง A4 สีดำ', sku: 'FLD-A4-BK', category: 'อุปกรณ์สำนักงาน', quantity: 30, minStockLevel: 15, unitPrice: 55, supplier: 'ตราช้าง', lastUpdated: new Date().toISOString() },
   { id: 'item4', name: 'หมึกพิมพ์เลเซอร์ HP CB435A (35A)', sku: 'INK-HP-35A', category: 'หมึกและโทนเนอร์', quantity: 8, minStockLevel: 5, unitPrice: 1800, supplier: 'เอชพี (ประเทศไทย)', lastUpdated: new Date().toISOString() },
   { id: 'item5', name: 'เก้าอี้สำนักงาน รุ่น ERGO-COMFORT', sku: 'CHR-ERG-001', category: 'เฟอร์นิเจอร์', quantity: 3, minStockLevel: 2, unitPrice: 3500, supplier: 'โมเดอร์นฟอร์ม', lastUpdated: new Date().toISOString() },
+  { id: 'it-item1', name: 'Laptop Dell XPS 15', sku: 'LAP-DELL-XPS15', category: 'อุปกรณ์ IT', quantity: 10, minStockLevel: 3, unitPrice: 65000, supplier: 'Dell Thailand', lastUpdated: new Date().toISOString() },
+  { id: 'it-item2', name: 'Monitor Dell 27" 4K', sku: 'MON-DELL-U2723', category: 'อุปกรณ์ IT', quantity: 15, minStockLevel: 5, unitPrice: 22000, supplier: 'Dell Thailand', lastUpdated: new Date().toISOString() },
+  { id: 'it-item3', name: 'Keyboard Logitech MX Keys', sku: 'KBD-LOGI-MX', category: 'อุปกรณ์ IT', quantity: 25, minStockLevel: 10, unitPrice: 3800, supplier: 'Synnex', lastUpdated: new Date().toISOString() },
+  { id: 'it-item4', name: 'Network Cable Cat6 5m', sku: 'CBL-CAT6-5M', category: 'อุปกรณ์ IT', quantity: 40, minStockLevel: 20, unitPrice: 150, supplier: 'Link', lastUpdated: new Date().toISOString() },
 ];
 export const addInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'lastUpdated'>): InventoryItem => {
   const newItem: InventoryItem = { ...itemData, id: `item${MOCK_INVENTORY_ITEMS.length + 1 + Math.floor(Math.random()*1000)}`, lastUpdated: new Date().toISOString() };
@@ -203,9 +216,12 @@ if (!STOCK_TRANSACTION_REASONS.includes('เบิกสำหรับโคร
 
 
 export let MOCK_STOCK_TRANSACTIONS: StockTransaction[] = [
-  { id: 'st1', itemId: 'item1', itemName: 'กระดาษ A4 80 แกรม', type: 'IN', quantity: 50, reason: 'สต็อกเริ่มต้น', date: new Date(Date.now() - 10*24*60*60*1000).toISOString(), employeeId: 'user1', employeeName: 'ผู้ดูแลระบบ' },
+  { id: 'st1', itemId: 'item1', itemName: 'กระดาษ A4 80 แกรม', type: 'IN', quantity: 50, reason: 'สต็อกเริ่มต้น', date: new Date(Date.now() - 10*24*60*60*1000).toISOString(), employeeId: 'user1-emp', employeeName: 'ผู้ดูแลระบบ' },
   { id: 'st2', itemId: 'item2', itemName: 'ปากกาลูกลื่นสีน้ำเงิน (แพ็ค 12)', type: 'IN', quantity: 20, reason: 'รับสินค้าจากการซื้อ', date: new Date(Date.now() - 5*24*60*60*1000).toISOString(), employeeId: 'user2', employeeName: MOCK_USERS.find(u=>u.id ==='user2')?.name || 'Manager' },
   { id: 'st3', itemId: 'item1', itemName: 'กระดาษ A4 80 แกรม', type: 'OUT', quantity: 5, reason: 'คำสั่งซื้อจากลูกค้า', date: new Date(Date.now() - 2*24*60*60*1000).toISOString(), employeeId: 'user3', employeeName: MOCK_USERS.find(u=>u.id ==='user3')?.name || 'Staff' },
+  { id: 'st-it1', itemId: 'it-item1', itemName: 'Laptop Dell XPS 15', type: 'IN', quantity: 10, reason: 'รับสินค้าจากการซื้อ', date: new Date(Date.now() - 8*24*60*60*1000).toISOString(), employeeId: 'user1-emp', employeeName: 'ผู้ดูแลระบบ' },
+  { id: 'st-it2', itemId: 'it-item1', itemName: 'Laptop Dell XPS 15', type: 'OUT', quantity: 1, reason: 'เบิกสำหรับโครงการ', date: new Date(Date.now() - 3*24*60*60*1000).toISOString(), employeeId: 'emp1', employeeName: 'อลิซ วันเดอร์แลนด์' },
+  { id: 'st-it3', itemId: 'it-item3', itemName: 'Keyboard Logitech MX Keys', type: 'OUT', quantity: 2, reason: 'เบิกใช้ภายใน', date: new Date(Date.now() - 1*24*60*60*1000).toISOString(), employeeId: 'user1-emp', employeeName: 'ผู้ดูแลระบบ' },
 ];
 export const addStockTransaction = (transactionData: Omit<StockTransaction, 'id' | 'date'>): StockTransaction => {
   const newTransaction: StockTransaction = { ...transactionData, id: `st${MOCK_STOCK_TRANSACTIONS.length + 1 + Math.floor(Math.random()*1000)}`, date: new Date().toISOString() };
@@ -257,8 +273,8 @@ export const deletePurchaseOrder = (id: string): void => {
 
 // --- Documents ---
 export let MOCK_DOCUMENTS: Document[] = [
-  { id: 'doc1', docNumber: 'QUO-2024-0123', type: DocumentType.QUOTATION, clientName: 'บริษัท กขค จำกัด', projectName: 'ออกแบบเว็บไซต์', date: '2024-04-20', amount: 50000, status: 'Sent', pdfUrl: '/mock-pdfs/QUO-2024-0123.pdf' },
-  { id: 'doc2', docNumber: 'INV-2024-0056', type: DocumentType.INVOICE, clientName: 'คุณสมศรี มีสุข', projectName: 'ติดตั้งระบบ POS', date: '2024-05-05', amount: 25000, status: 'Paid', pdfUrl: '/mock-pdfs/INV-2024-0056.pdf' },
+  { id: 'doc1', docNumber: 'QUO-2024-0123', type: DocumentType.QUOTATION, clientName: 'บริษัท กขค จำกัด', projectName: 'ออกแบบเว็บไซต์', date: '2024-04-20', amount: 50000, status: 'Sent' },
+  { id: 'doc2', docNumber: 'INV-2024-0056', type: DocumentType.INVOICE, clientName: 'คุณสมศรี มีสุข', projectName: 'ติดตั้งระบบ POS', date: '2024-05-05', amount: 25000, status: 'Paid' },
   { id: 'doc3', docNumber: 'DN-2024-0089', type: DocumentType.DELIVERY_NOTE, clientName: 'ห้างหุ้นส่วนจำกัด งจฉ', projectName: 'ส่งสินค้าล็อตใหญ่', date: '2024-05-12', status: 'Sent' },
 ];
 const generateDocNumber = (type: DocumentType): string => {
@@ -309,6 +325,9 @@ export const deleteCalendarEvent = (id: string): void => {
 
 // --- Chat Messages ---
 export const initialMessages: { [roomId: string]: ChatMessage[] } = {
+  [AI_ASSISTANT_ROOM_ID]: [
+    { id: 'msg-ai-welcome', roomId: AI_ASSISTANT_ROOM_ID, senderId: 'ai-assistant', senderName: 'AI Assistant', timestamp: new Date(Date.now() - 1000 * 60 * 10).toISOString(), text: 'สวัสดีครับ ผมคือผู้ช่วย AI ของ Officemate Pro มีอะไรให้ช่วยเหลือไหมครับ? สามารถสอบถามเกี่ยวกับการทำงาน, ขอให้ร่างอีเมล, หรือปรึกษาเรื่องทั่วไปได้เลย' },
+  ],
   'general': [
     { id: 'msg1', roomId: 'general', senderId: MOCK_USERS[0].id, senderName: MOCK_USERS[0].name, timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(), text: 'ยินดีต้อนรับสู่ห้องแชททั่วไป!' },
     { id: 'msg2', roomId: 'general', senderId: MOCK_USERS[1].id, senderName: MOCK_USERS[1].name, timestamp: new Date(Date.now() - 1000 * 60 * 2).toISOString(), text: 'สวัสดีทุกคน! ดีใจที่ได้มาอยู่ที่นี่' },
@@ -724,6 +743,53 @@ export const deleteLeaveRequest = (id: string): void => {
   MOCK_LEAVE_REQUESTS = MOCK_LEAVE_REQUESTS.filter(r => r.id !== id);
 };
 
+// --- Cash Advance ---
+export let MOCK_CASH_ADVANCE_REQUESTS: CashAdvanceRequest[] = [
+    {
+        id: 'ca1',
+        employeeId: 'emp2', // Bob
+        employeeName: MOCK_EMPLOYEES.find(e => e.id === 'emp2')?.name || '',
+        employeeCode: MOCK_EMPLOYEES.find(e => e.id === 'emp2')?.employeeCode || '',
+        requestDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        amount: 3000,
+        reason: 'ค่าเดินทางไปพบลูกค้าต่างจังหวัด',
+        status: CashAdvanceRequestStatus.APPROVED,
+        approverId: 'user1',
+        approverName: MOCK_USERS.find(u => u.id === 'user1')?.name,
+        approvalDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        notes: 'อนุมัติตามจริง'
+    },
+    {
+        id: 'ca2',
+        employeeId: 'user3', // Somchai
+        employeeName: MOCK_EMPLOYEES.find(e => e.id === 'user3')?.name || '',
+        employeeCode: MOCK_EMPLOYEES.find(e => e.id === 'user3')?.employeeCode || '',
+        requestDate: new Date().toISOString(),
+        amount: 1500,
+        reason: 'ค่าใช้จ่ายส่วนตัวเร่งด่วน',
+        status: CashAdvanceRequestStatus.PENDING,
+    }
+];
+
+export const addCashAdvanceRequest = (requestData: Omit<CashAdvanceRequest, 'id'>): CashAdvanceRequest => {
+  const newRequest: CashAdvanceRequest = { ...requestData, id: `ca${MOCK_CASH_ADVANCE_REQUESTS.length + 1 + Math.floor(Math.random()*1000)}` };
+  MOCK_CASH_ADVANCE_REQUESTS.push(newRequest);
+  return newRequest;
+};
+
+export const updateCashAdvanceRequest = (updatedRequest: CashAdvanceRequest): CashAdvanceRequest | null => {
+  const index = MOCK_CASH_ADVANCE_REQUESTS.findIndex(r => r.id === updatedRequest.id);
+  if (index !== -1) {
+    MOCK_CASH_ADVANCE_REQUESTS[index] = { ...MOCK_CASH_ADVANCE_REQUESTS[index], ...updatedRequest };
+    return MOCK_CASH_ADVANCE_REQUESTS[index];
+  }
+  return null;
+};
+
+export const deleteCashAdvanceRequest = (id: string): void => {
+  MOCK_CASH_ADVANCE_REQUESTS = MOCK_CASH_ADVANCE_REQUESTS.filter(r => r.id !== id);
+};
+
 
 export { MOCK_TAX_BRACKETS_SIMPLIFIED };
-export { initialMessages as MOCK_CHAT_MESSAGES }; 
+export { initialMessages as MOCK_CHAT_MESSAGES };

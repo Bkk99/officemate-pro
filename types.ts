@@ -1,8 +1,13 @@
+
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
   STAFF = 'Staff',
 }
+
+export type EmployeeStatusKey = 'Active' | 'Inactive' | 'On Leave';
+export type POStatusKey = 'Pending' | 'Approved' | 'Processing' | 'Shipped' | 'Completed' | 'Cancelled';
+export type DocumentStatusKey = 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
 
 export interface User {
   id: string;
@@ -35,7 +40,7 @@ export interface Employee {
   phone: string;
   department: string;
   position: string;
-  status: 'Active' | 'Inactive' | 'On Leave';
+  status: EmployeeStatusKey;
   hireDate: string; // Existing: Can be used as Joining Date
   contractUrl?: string; // Link to contract PDF
   profileImageUrl?: string;
@@ -98,7 +103,7 @@ export interface PurchaseOrder {
   supplier: string;
   items: { itemId: string; itemName: string; quantity: number; unitPrice: number }[];
   totalAmount: number;
-  status: 'Pending' | 'Approved' | 'Processing' | 'Shipped' | 'Completed' | 'Cancelled';
+  status: POStatusKey;
   orderDate: string;
   expectedDeliveryDate?: string;
   notes?: string;
@@ -118,7 +123,7 @@ export interface Document {
   projectName?: string;
   date: string;
   amount?: number;
-  status: 'Draft' | 'Sent' | 'Paid' | 'Overdue' | 'Cancelled';
+  status: DocumentStatusKey;
   pdfUrl?: string; // Link to generated PDF
 }
 
@@ -320,4 +325,28 @@ export interface LeaveRequest {
   notes?: string; // Notes by approver or HR
   // For UI, might add calculated duration
   durationInDays?: number;
+}
+
+// --- Cash Advance Types ---
+export enum CashAdvanceRequestStatus {
+  PENDING = 'Pending',
+  APPROVED = 'Approved',
+  REJECTED = 'Rejected',
+  PAID = 'Paid', // After approval, HR/Finance marks it as paid
+}
+
+export interface CashAdvanceRequest {
+  id: string;
+  employeeId: string;
+  employeeName: string; 
+  employeeCode?: string;
+  requestDate: string; // ISO Date String
+  amount: number;
+  reason: string;
+  status: CashAdvanceRequestStatus;
+  approverId?: string; 
+  approverName?: string;
+  approvalDate?: string; // ISO Date String
+  notes?: string; // Notes by approver or HR
+  paymentDate?: string; // When the cash was actually given
 }

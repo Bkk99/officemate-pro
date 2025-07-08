@@ -49,10 +49,10 @@ const ArrowDownTrayIconExport = (props: React.SVGProps<SVGSVGElement>) => ( // R
 
 
 const initialItemState: Omit<InventoryItem, 'id' | 'lastUpdated'> = {
-  name: '', sku: '', category: '', quantity: 0, minStockLevel: 10, unitPrice: 0, supplier: ''
+  name: '', sku: '', category: 'อุปกรณ์ IT', quantity: 0, minStockLevel: 10, unitPrice: 0, supplier: ''
 };
 
-export const InventoryPage: React.FC = () => {
+const ItInventoryPage: React.FC = () => {
   const { user } = useAuth();
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [allTransactions, setAllTransactions] = useState<StockTransaction[]>([]);
@@ -75,11 +75,11 @@ export const InventoryPage: React.FC = () => {
     const allItems = MOCK_INVENTORY_ITEMS;
     const allTrans = MOCK_STOCK_TRANSACTIONS;
 
-    const generalItems = allItems.filter(item => item.category !== 'อุปกรณ์ IT');
-    const generalItemIds = new Set(generalItems.map(item => item.id));
+    const itItems = allItems.filter(item => item.category === 'อุปกรณ์ IT');
+    const itItemIds = new Set(itItems.map(item => item.id));
 
-    setInventory(generalItems.map(item => ({...item, isLowStock: item.quantity < item.minStockLevel})));
-    setAllTransactions(allTrans.filter(t => generalItemIds.has(t.itemId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setInventory(itItems.map(item => ({...item, isLowStock: item.quantity < item.minStockLevel})));
+    setAllTransactions(allTrans.filter(t => itItemIds.has(t.itemId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     setIsLoading(false);
   }, []);
 
@@ -125,7 +125,7 @@ export const InventoryPage: React.FC = () => {
       setCurrentItem(item);
       setEditingItemId(item.id);
     } else {
-      setCurrentItem(initialItemState);
+      setCurrentItem({ ...initialItemState, category: 'อุปกรณ์ IT' });
       setEditingItemId(null);
     }
     setIsItemModalOpen(true);
@@ -212,7 +212,7 @@ export const InventoryPage: React.FC = () => {
         'อัปเดตล่าสุด': new Date(item.lastUpdated).toLocaleString('th-TH'),
         'สถานะสต็อกต่ำ': item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
     }));
-    exportToCsv('general_inventory_data', dataToExport);
+    exportToCsv('it_inventory_data', dataToExport);
   };
 
 
@@ -225,7 +225,6 @@ export const InventoryPage: React.FC = () => {
         </div>
       )
     },
-    { header: 'หมวดหมู่', accessor: 'category' },
     { header: 'จำนวน', accessor: 'quantity', className: 'text-right' },
     { header: 'สต็อกขั้นต่ำ', accessor: 'minStockLevel', className: 'text-right' },
     { header: 'ราคาต่อหน่วย', accessor: (item: InventoryItem) => `฿${item.unitPrice.toFixed(2)}`, className: 'text-right' },
@@ -269,7 +268,7 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-       <Card title="สรุปภาพรวมสต็อกทั่วไป">
+       <Card title="สรุปภาพรวมสต็อก IT">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
                   <h3 className="text-lg font-semibold text-gray-700 mb-2">สรุปประจำเดือนนี้</h3>
@@ -306,7 +305,7 @@ export const InventoryPage: React.FC = () => {
       </Card>
       
       <Card 
-        title="จัดการสต็อกทั่วไป"
+        title="จัดการสต็อก IT"
         actions={
             <div className="flex space-x-2">
                 {user?.role !== UserRole.STAFF && <Button onClick={handleExportInventory} variant="secondary" leftIcon={<ArrowDownTrayIconExport className="h-5 w-5"/>}>ส่งออก CSV</Button>}
@@ -318,11 +317,11 @@ export const InventoryPage: React.FC = () => {
             columns={inventoryColumns} 
             data={inventory} 
             isLoading={isLoading} 
-            emptyMessage="ไม่พบข้อมูลสินค้าในสต็อกทั่วไป"
+            emptyMessage="ไม่พบข้อมูลสินค้าในสต็อก IT"
         />
       </Card>
 
-      <Card title="ประวัติธุรกรรมสต็อกทั่วไปล่าสุด">
+      <Card title="ประวัติธุรกรรมสต็อก IT ล่าสุด">
         <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                 <button
@@ -357,11 +356,11 @@ export const InventoryPage: React.FC = () => {
       </Card>
 
       {user?.role !== UserRole.STAFF && isItemModalOpen && (
-        <Modal isOpen={isItemModalOpen} onClose={handleCloseItemModal} title={editingItemId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่'} size="lg">
+        <Modal isOpen={isItemModalOpen} onClose={handleCloseItemModal} title={editingItemId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้า IT ใหม่'} size="lg">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="ชื่อสินค้า" name="name" value={currentItem.name} onChange={handleItemChange} required />
               <Input label="รหัสสินค้า (SKU)" name="sku" value={currentItem.sku} onChange={handleItemChange} required />
-              <Input label="หมวดหมู่" name="category" value={currentItem.category} onChange={handleItemChange} />
+              <Input label="หมวดหมู่" name="category" value={currentItem.category} onChange={handleItemChange} required disabled />
               <Input label="ซัพพลายเออร์" name="supplier" value={currentItem.supplier || ''} onChange={handleItemChange} />
               <Input label="จำนวนคงเหลือ" name="quantity" type="number" value={currentItem.quantity} onChange={handleItemChange} min="0" required />
               <Input label="ระดับสต็อกขั้นต่ำ" name="minStockLevel" type="number" value={currentItem.minStockLevel} onChange={handleItemChange} min="0" required />
@@ -406,3 +405,5 @@ export const InventoryPage: React.FC = () => {
     </div>
   );
 };
+
+export default ItInventoryPage;

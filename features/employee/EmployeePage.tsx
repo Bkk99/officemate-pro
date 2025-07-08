@@ -1,10 +1,11 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings } from '../../types';
 import { 
     MOCK_EMPLOYEES, MOCK_TIME_LOGS, addEmployee, updateEmployee, deleteEmployee, 
     addTimeLog, getEmployeeTimeLogs, getAllPayrollComponents,
-    getFingerprintScannerSettings 
+    getFingerprintScannerSettings,
+    MOCK_USERS,
+    addUserAccount
 } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -75,6 +76,9 @@ export const EmployeePage: React.FC = () => {
   const [isSyncingScanner, setIsSyncingScanner] = useState(false);
   const [scannerSyncMessage, setScannerSyncMessage] = useState<string | null>(null);
 
+  // State for integrated user account creation
+  const [createAccount, setCreateAccount] = useState(false);
+  const [accountDetails, setAccountDetails] = useState({ username: '', password: '' });
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -93,10 +97,13 @@ export const EmployeePage: React.FC = () => {
     if (employee) {
       setCurrentEmployee(employee);
       setEditingEmployeeId(employee.id);
+      setAccountDetails({ username: employee.employeeCode || employee.name.toLowerCase().replace(/\s+/g,'.'), password: ''});
     } else {
       setCurrentEmployee({...initialEmployeeState, profileImageUrl: `https://picsum.photos/seed/${Date.now()}/200/200`});
       setEditingEmployeeId(null);
+      setAccountDetails({ username: '', password: ''});
     }
+    setCreateAccount(false); // Reset checkbox on modal open
     setActiveTab('details');
     setIsModalOpen(true);
   };
@@ -115,6 +122,11 @@ export const EmployeePage: React.FC = () => {
     } else {
         setCurrentEmployee(prev => ({ ...prev, [name]: value }));
     }
+  };
+  
+  const handleAccountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setAccountDetails(prev => ({ ...prev, [name]: value }));
   };
 
   const handleRecurringItemChange = (
@@ -161,10 +173,32 @@ export const EmployeePage: React.FC = () => {
 
 
   const handleSubmit = async () => {
-    if (editingEmployeeId) {
-      updateEmployee(currentEmployee as Employee);
+    if (createAccount) {
+        if (!accountDetails.username || !accountDetails.password) {
+            alert('กรุณาระบุชื่อผู้ใช้และรหัสผ่านสำหรับบัญชีใหม่');
+            return;
+        }
+
+        const newUser = addUserAccount({
+            username: accountDetails.username,
+            password: accountDetails.password,
+            name: currentEmployee.name,
+            role: UserRole.STAFF, // Default role
+            department: currentEmployee.department,
+        });
+
+        if (editingEmployeeId) {
+            const updatedEmployeeWithNewId = { ...currentEmployee, id: newUser.id } as Employee;
+            updateEmployee(updatedEmployeeWithNewId, editingEmployeeId);
+        } else {
+            addEmployee(currentEmployee as Omit<Employee, 'id'>, newUser.id);
+        }
     } else {
-      addEmployee(currentEmployee as Omit<Employee, 'id'>);
+        if (editingEmployeeId) {
+            updateEmployee(currentEmployee as Employee);
+        } else {
+            addEmployee(currentEmployee as Omit<Employee, 'id'>);
+        }
     }
     await fetchAllData(); 
     handleCloseModal();
@@ -354,6 +388,8 @@ export const EmployeePage: React.FC = () => {
   const availableAllowanceComponents = payrollComponents.filter(pc => pc.type === 'Allowance' && !pc.isSystemCalculated);
   const availableDeductionComponents = payrollComponents.filter(pc => pc.type === 'Deduction' && !pc.isSystemCalculated);
 
+  const hasUserAccount = editingEmployeeId ? MOCK_USERS.some(u => u.id === editingEmployeeId) : false;
+
   return (
     <div className="space-y-6">
       <Card 
@@ -461,6 +497,22 @@ export const EmployeePage: React.FC = () => {
                     ))}
                     <Button variant="secondary" size="sm" onClick={() => addRecurringItem('deduction')} leftIcon={<PlusIcon className="h-4"/>}>เพิ่มเงินหักประจำ</Button>
                 </div>
+            </div>
+        )}
+
+        {!hasUserAccount && user?.role === UserRole.ADMIN && (
+            <div className="mt-6 border-t pt-4">
+                <h4 className="text-md font-semibold mb-2 text-primary-700">ตั้งค่าบัญชีผู้ใช้</h4>
+                <label className="flex items-center cursor-pointer">
+                    <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
+                    <span className="ml-2 text-sm font-medium text-gray-700">สร้างบัญชีผู้ใช้สำหรับพนักงานคนนี้</span>
+                </label>
+                {createAccount && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 p-4 bg-primary-50 rounded-lg">
+                        <Input label="ชื่อผู้ใช้ (Username)" name="username" value={accountDetails.username} onChange={handleAccountChange} required />
+                        <Input label="รหัสผ่าน" name="password" type="password" value={accountDetails.password} onChange={handleAccountChange} required autoComplete="new-password"/>
+                    </div>
+                )}
             </div>
         )}
 
