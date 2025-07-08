@@ -2,13 +2,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CashAdvanceRequest, CashAdvanceRequestStatus, UserRole, Employee } from '../../types';
 import { 
-    MOCK_CASH_ADVANCE_REQUESTS, 
-    MOCK_EMPLOYEES,
+    getCashAdvanceRequests,
     addCashAdvanceRequest, 
     updateCashAdvanceRequest, 
     deleteCashAdvanceRequest, 
-    getEmployeeById
-} from '../../services/mockData';
+    getEmployeeById,
+    getEmployees
+} from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -48,6 +48,12 @@ const BanknotesIcon = (props: React.SVGProps<SVGSVGElement>) => (
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v15c0 .621-.504 1.125-1.125 1.125h-15A1.125 1.125 0 012.25 20.25v-15c0-.621.504-1.125 1.125-1.125H3.75m15-3V4.5A2.25 2.25 0 0016.5 2.25h-12A2.25 2.25 0 002.25 4.5v1.5M12 12.75a.75.75 0 000-1.5H5.25a.75.75 0 000 1.5H12z" />
     </svg>
   );
+const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1.25-7.75A.75.75 0 0010 9.5v2.25H7.75a.75.75 0 000 1.5H10v2.25a.75.75 0 001.5 0V13.5h2.25a.75.75 0 000-1.5H11.5V9.5zM10 2a.75.75 0 01.75.75v3.558c1.95.36 3.635 1.493 4.81 3.207a.75.75 0 01-1.12.99C13.551 8.89 11.853 8 10 8s-3.551.89-4.44 2.515a.75.75 0 01-1.12-.99A6.479 6.479 0 019.25 6.308V2.75A.75.75 0 0110 2z" clipRule="evenodd" />
+    </svg>
+);
+
 
 const initialRequestState: Omit<CashAdvanceRequest, 'id' | 'requestDate' | 'employeeName' | 'status' | 'employeeCode'> = {
   employeeId: '',
@@ -75,10 +81,18 @@ export const CashAdvancePage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setAllRequests(MOCK_CASH_ADVANCE_REQUESTS.sort((a,b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
-    setEmployeesForSelect(MOCK_EMPLOYEES.filter(e => e.status === 'Active'));
-    setIsLoading(false);
+    try {
+        const [requests, employees] = await Promise.all([
+            getCashAdvanceRequests(),
+            getEmployees()
+        ]);
+        setAllRequests(requests);
+        setEmployeesForSelect(employees.filter(e => e.status === 'Active'));
+    } catch(error) {
+        console.error("Failed to fetch cash advance data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -119,7 +133,7 @@ export const CashAdvancePage: React.FC = () => {
         return;
     }
     
-    const employeeDetails = getEmployeeById(targetEmployeeId);
+    const employeeDetails = await getEmployeeById(targetEmployeeId);
     if (!employeeDetails) {
         alert("ไม่พบข้อมูลพนักงาน");
         return;
@@ -134,16 +148,20 @@ export const CashAdvancePage: React.FC = () => {
         reason: currentRequest.reason,
         status: CashAdvanceRequestStatus.PENDING,
     };
-
-    addCashAdvanceRequest(requestData);
-    await fetchData();
-    handleCloseModal();
+    try {
+        await addCashAdvanceRequest(requestData);
+        await fetchData();
+        handleCloseModal();
+    } catch (error) {
+        console.error("Failed to submit cash advance request:", error);
+        alert("เกิดข้อผิดพลาดในการยื่นคำขอ");
+    }
   };
 
   const handleDeleteRequest = async (id: string) => {
     if (!canManageAllRequests) return;
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการเบิกเงินนี้?')) {
-      deleteCashAdvanceRequest(id);
+      await deleteCashAdvanceRequest(id);
       await fetchData();
     }
   };
@@ -165,7 +183,7 @@ export const CashAdvancePage: React.FC = () => {
         approvalDate: new Date().toISOString(),
         notes: actionNotes,
     };
-    updateCashAdvanceRequest(updatedRequest);
+    await updateCashAdvanceRequest(updatedRequest);
     await fetchData();
     setIsApprovalModalOpen(false);
     setRequestForAction(null);
@@ -179,9 +197,27 @@ export const CashAdvancePage: React.FC = () => {
             status: CashAdvanceRequestStatus.PAID,
             paymentDate: new Date().toISOString(),
         };
-        updateCashAdvanceRequest(updatedRequest);
+        await updateCashAdvanceRequest(updatedRequest);
         await fetchData();
     }
+  };
+
+  const handleExportRequests = () => {
+    if (!canManageAllRequests) return;
+    const dataToExport = allRequests.map(req => ({
+        'ID คำขอ': req.id,
+        'รหัสพนักงาน': req.employeeCode,
+        'ชื่อพนักงาน': req.employeeName,
+        'วันที่ขอเบิก': new Date(req.requestDate).toLocaleDateString('th-TH'),
+        'จำนวนเงิน': req.amount,
+        'เหตุผล': req.reason,
+        'สถานะ': CASH_ADVANCE_STATUS_TH[req.status],
+        'ผู้อนุมัติ': req.approverName || '-',
+        'วันที่อนุมัติ': req.approvalDate ? new Date(req.approvalDate).toLocaleDateString('th-TH') : '-',
+        'วันที่จ่ายเงิน': req.paymentDate ? new Date(req.paymentDate).toLocaleDateString('th-TH') : '-',
+        'หมายเหตุ': req.notes || '-',
+    }));
+    exportToCsv('cash_advance_requests_data', dataToExport);
   };
 
   const displayedRequests = isRegularStaff && user 
@@ -226,7 +262,12 @@ export const CashAdvancePage: React.FC = () => {
     <div className="space-y-6">
       <Card 
         title={pageTitle}
-        actions={<Button onClick={handleOpenModal} leftIcon={<PlusIcon className="h-5 w-5" />}>ยื่นคำขอเบิกเงิน</Button>}
+        actions={
+            <div className="flex space-x-2">
+                {canManageAllRequests && <Button onClick={handleExportRequests} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button>}
+                <Button onClick={handleOpenModal} leftIcon={<PlusIcon className="h-5 w-5" />}>ยื่นคำขอเบิกเงิน</Button>
+            </div>
+        }
       >
         <Table columns={columns} data={displayedRequests} isLoading={isLoading} emptyMessage="ไม่พบรายการเบิกเงิน"/>
       </Card>

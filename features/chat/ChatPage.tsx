@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import { useAuth } from '../../contexts/AuthContext';
 import { ChatMessage, ChatRoom, UserRole } from '../../types';
 import { CHAT_ROOMS_SAMPLE, DEPARTMENTS, AI_ASSISTANT_ROOM_ID, SparklesIcon } from '../../constants';
-import { MOCK_USERS, addChatMessageToStore, MOCK_CHAT_MESSAGES } from '../../services/mockData';
+import { addChatMessage, getChatMessages } from '../../services/api';
 import { Button } from '../../components/ui/Button';
 import { Textarea } from '../../components/ui/Input';
 import { subscribeToChatNotifications, updateGlobalChatUnreadCount } from '../../services/notificationService';
@@ -44,7 +45,7 @@ export const ChatPage: React.FC = () => {
   const { user } = useAuth();
   const [chatRooms] = useState<(typeof CHAT_ROOMS_SAMPLE)>(CHAT_ROOMS_SAMPLE); 
   const [activeRoomId, setActiveRoomId] = useState<string>(chatRooms[0].id);
-  const [messages, setMessages] = useState<{ [roomId: string]: ChatMessage[] }>(MOCK_CHAT_MESSAGES);
+  const [messages, setMessages] = useState<{ [roomId: string]: ChatMessage[] }>({});
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -74,20 +75,30 @@ export const ChatPage: React.FC = () => {
         }
     };
   }, [toastInfo]);
-
-  const mapMessagesToGeminiHistory = (messages: ChatMessage[]) => {
-    return messages.map(msg => ({
+  
+  const mapMessagesToGeminiHistory = (msgs: ChatMessage[]) => {
+    return msgs.map(msg => ({
         role: msg.senderId === AI_SENDER_ID ? 'model' : 'user',
         parts: [{ text: msg.text || '' }]
     })).filter(msg => msg.parts[0].text.trim() !== '');
   };
+  
+  const fetchMessagesForRoom = async (roomId: string) => {
+    const fetchedMessages = await getChatMessages(roomId);
+    setMessages(prev => ({...prev, [roomId]: fetchedMessages}));
+  }
+
+  useEffect(() => {
+    if (!messages[activeRoomId]) {
+      fetchMessagesForRoom(activeRoomId);
+    }
+  }, [activeRoomId, messages]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !user) return;
     const userMessageText = newMessage.trim();
     
-    const message: ChatMessage = {
-      id: `msg${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    const message: Omit<ChatMessage, 'id'> = {
       roomId: activeRoomId,
       senderId: user.id,
       senderName: user.name,
@@ -95,26 +106,29 @@ export const ChatPage: React.FC = () => {
       text: userMessageText,
     };
     
-    addChatMessageToStore(message);
     setNewMessage('');
+    const sentMessage = await addChatMessage(message);
+    setMessages(prev => ({...prev, [activeRoomId]: [...(prev[activeRoomId] || []), sentMessage]}));
 
     if (activeRoomId === AI_ASSISTANT_ROOM_ID && aiChat) {
       setIsAiThinking(true);
       try {
-        const result = await aiChat.sendMessageStream(userMessageText);
+        const result = await aiChat.sendMessageStream({ message: userMessageText });
         let aiResponseText = '';
         let aiMessage: ChatMessage | null = null;
+
         for await (const chunk of result) {
             aiResponseText += chunk.text;
             if (!aiMessage) {
-                aiMessage = {
-                    id: `msg${Date.now()}`,
+                const newAiMessage: Omit<ChatMessage, 'id'> = {
                     roomId: AI_ASSISTANT_ROOM_ID,
                     senderId: AI_SENDER_ID,
                     senderName: 'AI Assistant',
                     timestamp: new Date().toISOString(),
                     text: aiResponseText,
                 };
+                // Temporarily add to state for UI update
+                 aiMessage = { ...newAiMessage, id: `temp-ai-${Date.now()}`};
                 setMessages(prev => ({...prev, [activeRoomId]: [...(prev[activeRoomId] || []), aiMessage as ChatMessage] }));
             } else {
                  setMessages(prev => {
@@ -124,14 +138,19 @@ export const ChatPage: React.FC = () => {
             }
         }
         if(aiMessage) {
-           addChatMessageToStore(aiMessage); // Final update to mock db and notifications
+           // Replace temp message with final one from DB
+           const { id: tempId, ...messageToSave } = aiMessage;
+           const finalAiMessage = await addChatMessage(messageToSave);
+           setMessages(prev => ({...prev, [activeRoomId]: prev[activeRoomId].map(m => m.id === aiMessage!.id ? finalAiMessage : m)}));
         }
       } catch (error) {
         console.error("Gemini API error:", error);
-        addChatMessageToStore({
-          id: `msg-error-${Date.now()}`, roomId: AI_ASSISTANT_ROOM_ID, senderId: AI_SENDER_ID, senderName: 'AI Assistant',
+        const errorMsg = {
+          roomId: AI_ASSISTANT_ROOM_ID, senderId: AI_SENDER_ID, senderName: 'AI Assistant',
           timestamp: new Date().toISOString(), text: 'ขออภัยค่ะ เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI กรุณาลองใหม่อีกครั้ง'
-        });
+        };
+        const finalErrorMsg = await addChatMessage(errorMsg);
+        setMessages(prev => ({...prev, [activeRoomId]: [...(prev[activeRoomId] || []), finalErrorMsg]}));
       } finally {
         setIsAiThinking(false);
       }
@@ -148,12 +167,15 @@ export const ChatPage: React.FC = () => {
             const chat = ai.chats.create({
                 model: 'gemini-2.5-flash-preview-04-17',
                 history: geminiHistory,
-                systemInstruction: "You are a helpful office assistant for a company called 'Officemate Pro'. Be friendly, concise, and professional. Answer questions related to general office tasks, productivity, and professional communication in Thai or English as the user prefers."
+                config: {
+                    systemInstruction: "You are a helpful office assistant for a company called 'Officemate Pro'. Be friendly, concise, and professional. Answer questions related to general office tasks, productivity, and professional communication in Thai or English as the user prefers."
+                }
             });
             setAiChat(chat);
         } catch (e) {
             console.error("Failed to initialize Gemini AI Chat:", e);
-            addChatMessageToStore({ id: 'err-ai-init', roomId, senderId: AI_SENDER_ID, senderName: 'AI Assistant', text: 'ไม่สามารถเริ่มต้นเซสชันกับ AI ได้ กรุณาตรวจสอบการตั้งค่า API Key', timestamp: new Date().toISOString() });
+            const errorMsg = { roomId, senderId: AI_SENDER_ID, senderName: 'AI Assistant', text: 'ไม่สามารถเริ่มต้นเซสชันกับ AI ได้ กรุณาตรวจสอบการตั้งค่า API Key', timestamp: new Date().toISOString() };
+            addChatMessage(errorMsg).then(finalMsg => setMessages(prev => ({...prev, [roomId]: [...(prev[roomId] || []), finalMsg] })));
         }
     }
     setUnreadRoomIds(prev => {
@@ -169,7 +191,6 @@ export const ChatPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // Auto-select AI room on first load if no API key error
     if (activeRoomId === AI_ASSISTANT_ROOM_ID) {
       handleRoomSelect(AI_ASSISTANT_ROOM_ID);
     }
@@ -282,7 +303,6 @@ export const ChatPage: React.FC = () => {
                 <GroupChatIcon className="w-20 h-20 text-primary-400 mb-6" />
                 <h3 className="text-xl font-semibold text-primary-600 mb-2">แชทภายในองค์กร</h3>
                 <p className="text-secondary-500">เลือกห้องสนทนาจากด้านซ้าย หรือเริ่มการสนทนาใหม่</p>
-                <p className="text-xs text-secondary-400 mt-4">(นี่เป็นระบบจำลอง ข้อความจะถูกเก็บไว้ในหน่วยความจำของเบราว์เซอร์เท่านั้น)</p>
             </div>
           )}
 

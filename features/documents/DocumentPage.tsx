@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Document, DocumentType, UserRole } from '../../types';
-import { MOCK_DOCUMENTS, addDocument, updateDocument, deleteDocument } from '../../services/mockData';
+import { getDocuments, addDocument, updateDocument, deleteDocument } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -60,9 +60,14 @@ export const DocumentPage: React.FC = () => {
 
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); 
-    setDocuments(MOCK_DOCUMENTS);
-    setIsLoading(false);
+    try {
+        const docData = await getDocuments();
+        setDocuments(docData);
+    } catch(error) {
+        console.error("Failed to fetch documents:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -94,20 +99,26 @@ export const DocumentPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (user?.role === UserRole.STAFF) return; // Staff cannot submit
-    if (editingDocId) {
-      updateDocument(currentDocument as Document);
-    } else {
-      addDocument(currentDocument as Omit<Document, 'id' | 'docNumber'>);
+    if (user?.role === UserRole.STAFF) return;
+    try {
+        if (editingDocId) {
+            await updateDocument(currentDocument as Document);
+        } else {
+            const docWithNumber = { ...currentDocument, docNumber: `${currentDocument.type.substring(0,2).toUpperCase()}-${Date.now()}`};
+            await addDocument(docWithNumber as Omit<Document, 'id'>);
+        }
+        await fetchDocuments();
+        handleCloseModal();
+    } catch (error) {
+        console.error("Failed to save document:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกเอกสาร");
     }
-    await fetchDocuments();
-    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot delete
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบเอกสารนี้?')) {
-      deleteDocument(id);
+      await deleteDocument(id);
       await fetchDocuments();
     }
   };

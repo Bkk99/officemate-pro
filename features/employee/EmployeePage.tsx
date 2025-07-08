@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings } from '../../types';
+import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User } from '../../types';
 import { 
-    MOCK_EMPLOYEES, MOCK_TIME_LOGS, addEmployee, updateEmployee, deleteEmployee, 
-    addTimeLog, getEmployeeTimeLogs, getAllPayrollComponents,
-    getFingerprintScannerSettings,
-    MOCK_USERS,
-    addUserAccount
-} from '../../services/mockData';
+    getEmployees, addEmployee, updateEmployee, deleteEmployee, 
+    addTimeLog, getEmployeeTimeLogs, getPayrollComponents,
+    saveSetting, getSetting,
+    getUserProfile
+} from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -75,35 +74,44 @@ export const EmployeePage: React.FC = () => {
 
   const [isSyncingScanner, setIsSyncingScanner] = useState(false);
   const [scannerSyncMessage, setScannerSyncMessage] = useState<string | null>(null);
-
-  // State for integrated user account creation
   const [createAccount, setCreateAccount] = useState(false);
   const [accountDetails, setAccountDetails] = useState({ username: '', password: '' });
+  const [hasUserAccount, setHasUserAccount] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setEmployees(MOCK_EMPLOYEES);
-    setTimeLogs(MOCK_TIME_LOGS); 
-    setPayrollComponents(getAllPayrollComponents());
-    setIsLoading(false);
+    try {
+        const [empData, pcData] = await Promise.all([
+            getEmployees(),
+            getPayrollComponents(),
+        ]);
+        setEmployees(empData);
+        setPayrollComponents(pcData);
+    } catch (error) {
+        console.error("Failed to fetch employee data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
 
-  const handleOpenModal = (employee?: Employee) => {
+  const handleOpenModal = async (employee?: Employee) => {
     if (employee) {
       setCurrentEmployee(employee);
       setEditingEmployeeId(employee.id);
-      setAccountDetails({ username: employee.employeeCode || employee.name.toLowerCase().replace(/\s+/g,'.'), password: ''});
+      const profile = await getUserProfile(employee.id);
+      setHasUserAccount(!!profile);
+      setAccountDetails({ username: profile?.username || employee.email, password: ''});
     } else {
       setCurrentEmployee({...initialEmployeeState, profileImageUrl: `https://picsum.photos/seed/${Date.now()}/200/200`});
       setEditingEmployeeId(null);
       setAccountDetails({ username: '', password: ''});
+      setHasUserAccount(false);
     }
-    setCreateAccount(false); // Reset checkbox on modal open
+    setCreateAccount(false);
     setActiveTab('details');
     setIsModalOpen(true);
   };
@@ -129,16 +137,10 @@ export const EmployeePage: React.FC = () => {
     setAccountDetails(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleRecurringItemChange = (
-    type: 'allowance' | 'deduction', 
-    index: number, 
-    field: 'payrollComponentId' | 'amount', 
-    value: string | number
-  ) => {
+  const handleRecurringItemChange = (type: 'allowance' | 'deduction', index: number, field: 'payrollComponentId' | 'amount', value: string | number) => {
     setCurrentEmployee(prev => {
         const items = type === 'allowance' ? [...(prev.recurringAllowances || [])] : [...(prev.recurringDeductions || [])];
         if (!items[index]) return prev; 
-
         if (field === 'payrollComponentId') {
             const selectedComponent = payrollComponents.find(pc => pc.id === value);
             items[index].payrollComponentId = value as string;
@@ -146,68 +148,50 @@ export const EmployeePage: React.FC = () => {
         } else if (field === 'amount') {
             items[index].amount = parseFloat(value as string) || 0;
         }
-        
-        return type === 'allowance' 
-            ? { ...prev, recurringAllowances: items as EmployeeAllowance[] } 
-            : { ...prev, recurringDeductions: items as EmployeeDeduction[] };
+        return type === 'allowance' ? { ...prev, recurringAllowances: items as EmployeeAllowance[] } : { ...prev, recurringDeductions: items as EmployeeDeduction[] };
     });
   };
 
   const addRecurringItem = (type: 'allowance' | 'deduction') => {
     setCurrentEmployee(prev => {
         const newItem = { id: `temp-${Date.now()}`, payrollComponentId: '', name: '', amount: 0 };
-        return type === 'allowance'
-            ? { ...prev, recurringAllowances: [...(prev.recurringAllowances || []), newItem] }
-            : { ...prev, recurringDeductions: [...(prev.recurringDeductions || []), newItem] };
+        return type === 'allowance' ? { ...prev, recurringAllowances: [...(prev.recurringAllowances || []), newItem] } : { ...prev, recurringDeductions: [...(prev.recurringDeductions || []), newItem] };
     });
   };
 
   const removeRecurringItem = (type: 'allowance' | 'deduction', index: number) => {
     setCurrentEmployee(prev => {
         const items = type === 'allowance' ? prev.recurringAllowances || [] : prev.recurringDeductions || [];
-        return type === 'allowance'
-            ? { ...prev, recurringAllowances: items.filter((_, i) => i !== index) }
-            : { ...prev, recurringDeductions: items.filter((_, i) => i !== index) };
+        return type === 'allowance' ? { ...prev, recurringAllowances: items.filter((_, i) => i !== index) } : { ...prev, recurringDeductions: items.filter((_, i) => i !== index) };
     });
   };
 
-
   const handleSubmit = async () => {
-    if (createAccount) {
-        if (!accountDetails.username || !accountDetails.password) {
-            alert('กรุณาระบุชื่อผู้ใช้และรหัสผ่านสำหรับบัญชีใหม่');
-            return;
-        }
-
-        const newUser = addUserAccount({
-            username: accountDetails.username,
-            password: accountDetails.password,
-            name: currentEmployee.name,
-            role: UserRole.STAFF, // Default role
-            department: currentEmployee.department,
-        });
-
+    // Note: Creating user accounts via client-side is disabled for security. This should be done in Supabase dashboard.
+    try {
         if (editingEmployeeId) {
-            const updatedEmployeeWithNewId = { ...currentEmployee, id: newUser.id } as Employee;
-            updateEmployee(updatedEmployeeWithNewId, editingEmployeeId);
+            await updateEmployee(currentEmployee as Employee);
         } else {
-            addEmployee(currentEmployee as Omit<Employee, 'id'>, newUser.id);
+            await addEmployee(currentEmployee as Omit<Employee, 'id'>);
         }
-    } else {
-        if (editingEmployeeId) {
-            updateEmployee(currentEmployee as Employee);
-        } else {
-            addEmployee(currentEmployee as Omit<Employee, 'id'>);
-        }
+    } catch (error) {
+        console.error("Failed to save employee:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลพนักงาน");
+    } finally {
+        await fetchAllData(); 
+        handleCloseModal();
     }
-    await fetchAllData(); 
-    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบพนักงานคนนี้?')) {
-      deleteEmployee(id);
-      await fetchAllData();
+    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบพนักงานคนนี้? การดำเนินการนี้อาจส่งผลกระทบต่อข้อมูลที่เกี่ยวข้อง')) {
+      try {
+        await deleteEmployee(id);
+        await fetchAllData();
+      } catch (error) {
+        console.error("Failed to delete employee:", error);
+        alert("เกิดข้อผิดพลาดในการลบพนักงาน");
+      }
     }
   };
 
@@ -232,49 +216,44 @@ export const EmployeePage: React.FC = () => {
         alert("จำเป็นต้องระบุพนักงานและเวลาเข้างาน");
         return;
     }
-    addTimeLog({
-        employeeId: selectedEmployeeForLogs.id,
-        employeeName: selectedEmployeeForLogs.name,
-        clockIn: new Date(manualTimeLog.clockIn).toISOString(),
-        clockOut: manualTimeLog.clockOut ? new Date(manualTimeLog.clockOut).toISOString() : undefined,
-        notes: manualTimeLog.notes,
-        source: 'Manual',
-    });
-    await fetchAllData(); 
-    handleCloseTimeLogModal();
+    try {
+        await addTimeLog({
+            employeeId: selectedEmployeeForLogs.id,
+            employeeName: selectedEmployeeForLogs.name,
+            clockIn: new Date(manualTimeLog.clockIn).toISOString(),
+            clockOut: manualTimeLog.clockOut ? new Date(manualTimeLog.clockOut).toISOString() : undefined,
+            notes: manualTimeLog.notes,
+            source: 'Manual',
+        });
+        alert("บันทึกเวลาสำเร็จ");
+        handleCloseTimeLogModal();
+    } catch (error) {
+        console.error("Failed to add time log:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกเวลา");
+    }
   };
 
-  const handleOpenViewLogsModal = (employee: Employee) => {
+  const handleOpenViewLogsModal = async (employee: Employee) => {
     setSelectedEmployeeForLogs(employee);
     setIsViewLogsModalOpen(true);
+    try {
+        const logs = await getEmployeeTimeLogs(employee.id);
+        setTimeLogs(logs);
+    } catch(error) {
+        console.error(`Failed to fetch time logs for ${employee.name}`, error);
+        setTimeLogs([]);
+    }
   };
 
   const handleCloseViewLogsModal = () => {
     setIsViewLogsModalOpen(false);
     setSelectedEmployeeForLogs(null);
+    setTimeLogs([]);
   };
   
   const handleExportEmployees = () => {
     const dataToExport = employees.map(emp => ({
-        'รหัสพนักงาน': emp.employeeCode || '',
-        'ชื่อ-นามสกุล (ไทย)': emp.name,
-        'ชื่อ-นามสกุล (อังกฤษ)': emp.nameEn || '',
-        'อีเมล': emp.email,
-        'เบอร์โทรศัพท์': emp.phone,
-        'แผนก': emp.department,
-        'ตำแหน่ง': emp.position,
-        'สถานะ': EMPLOYEE_STATUSES_TH[emp.status as keyof typeof EMPLOYEE_STATUSES_TH] || emp.status,
-        'วันที่เริ่มงาน': new Date(emp.hireDate).toLocaleDateString('th-TH'),
-        'เลขที่หนังสือเดินทาง': emp.passportNumber || '',
-        'หนังสือเดินทางหมดอายุ': emp.passportExpiryDate ? new Date(emp.passportExpiryDate).toLocaleDateString('th-TH') : '',
-        'รหัสสแกนนิ้ว': emp.fingerprintScannerId || '',
-        'เงินเดือนพื้นฐาน': emp.baseSalary || 0,
-        'ชื่อธนาคาร': emp.bankName || '',
-        'เลขบัญชีธนาคาร': emp.bankAccountNumber || '',
-        'เลขประจำตัวผู้เสียภาษี': emp.taxId || '',
-        'เลขประกันสังคม': emp.socialSecurityNumber || '',
-        'อัตรากองทุนสำรองเลี้ยงชีพ (ลูกจ้าง %)': emp.providentFundRateEmployee || 0,
-        'อัตรากองทุนสำรองเลี้ยงชีพ (นายจ้าง %)': emp.providentFundRateEmployer || 0,
+        'รหัสพนักงาน': emp.employeeCode || '', 'ชื่อ-นามสกุล (ไทย)': emp.name, 'ชื่อ-นามสกุล (อังกฤษ)': emp.nameEn || '', 'อีเมล': emp.email, 'เบอร์โทรศัพท์': emp.phone, 'แผนก': emp.department, 'ตำแหน่ง': emp.position, 'สถานะ': EMPLOYEE_STATUSES_TH[emp.status as keyof typeof EMPLOYEE_STATUSES_TH] || emp.status, 'วันที่เริ่มงาน': new Date(emp.hireDate).toLocaleDateString('th-TH'), 'เลขที่หนังสือเดินทาง': emp.passportNumber || '', 'หนังสือเดินทางหมดอายุ': emp.passportExpiryDate ? new Date(emp.passportExpiryDate).toLocaleDateString('th-TH') : '', 'รหัสสแกนนิ้ว': emp.fingerprintScannerId || '', 'เงินเดือนพื้นฐาน': emp.baseSalary || 0, 'ชื่อธนาคาร': emp.bankName || '', 'เลขบัญชีธนาคาร': emp.bankAccountNumber || '', 'เลขประจำตัวผู้เสียภาษี': emp.taxId || '', 'เลขประกันสังคม': emp.socialSecurityNumber || '', 'อัตรากองทุนสำรองเลี้ยงชีพ (ลูกจ้าง %)': emp.providentFundRateEmployee || 0, 'อัตรากองทุนสำรองเลี้ยงชีพ (นายจ้าง %)': emp.providentFundRateEmployer || 0,
     }));
     exportToCsv('employees_data', dataToExport);
   };
@@ -282,73 +261,22 @@ export const EmployeePage: React.FC = () => {
   const handleSimulateScannerSyncMain = async () => {
     setIsSyncingScanner(true);
     setScannerSyncMessage("กำลังซิงค์ข้อมูลจากเครื่องสแกนนิ้ว (จำลอง)...");
-    const scannerSettings = await getFingerprintScannerSettings();
+    const scannerSettings: FingerprintScannerSettings | null = await getSetting('fingerprintSettings');
     if (!scannerSettings || !scannerSettings.ipAddress || !scannerSettings.port) {
         setScannerSyncMessage("ข้อผิดพลาด: กรุณาตั้งค่าเครื่องสแกนนิ้วก่อนในหน้า 'ตั้งค่าระบบ > ตั้งค่าเครื่องสแกนนิ้ว'");
         setIsSyncingScanner(false);
         return;
     }
-
     await new Promise(resolve => setTimeout(resolve, 2000)); 
-
-    const mockRawScannerData = [ 
-        { scannerUserId: "FP001", timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(), type: "clock-in" },
-        { scannerUserId: "FP002", timestamp: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000).toISOString(), type: "clock-in" },
-        { scannerUserId: "FP001", timestamp: new Date(Date.now() - Math.random() * 8 * 60 * 60 * 1000).toISOString(), type: "clock-out" },
-        { scannerUserId: "FP004", timestamp: new Date(Date.now() - Math.random() * 20 * 60 * 60 * 1000).toISOString(), type: "clock-in" }, 
-        { scannerUserId: "FP004", timestamp: new Date(Date.now() - Math.random() * 7 * 60 * 60 * 1000).toISOString(), type: "clock-out" },
-        { scannerUserId: "FP005", timestamp: new Date(Date.now() - Math.random() * 23 * 60 * 60 * 1000).toISOString(), type: "clock-in" }, 
-        { scannerUserId: "FP005", timestamp: new Date(Date.now() - Math.random() * 6 * 60 * 60 * 1000).toISOString(), type: "clock-out" },
-        { scannerUserId: "FPXYZ", timestamp: new Date().toISOString(), type: "clock-in" }, 
-    ];
-
-    let logsAddedCount = 0;
-    let unknownScans = 0;
-    const employeeTimestamps: Record<string, { clockIn?: string, clockOut?: string}> = {};
-
-    for (const rawLog of mockRawScannerData) {
-        const employee = MOCK_EMPLOYEES.find(emp => emp.fingerprintScannerId === rawLog.scannerUserId);
-        if (employee) {
-            if (!employeeTimestamps[employee.id]) employeeTimestamps[employee.id] = {};
-            if(rawLog.type === "clock-in" && !employeeTimestamps[employee.id].clockIn) {
-                employeeTimestamps[employee.id].clockIn = rawLog.timestamp;
-            } else if (rawLog.type === "clock-out") {
-                employeeTimestamps[employee.id].clockOut = rawLog.timestamp;
-            }
-        } else {
-            unknownScans++;
-        }
-    }
-    
-    for (const empId in employeeTimestamps) {
-        const empData = employeeTimestamps[empId];
-        const employee = MOCK_EMPLOYEES.find(e => e.id === empId);
-        if(employee && empData.clockIn){
-             addTimeLog({
-                employeeId: employee.id,
-                employeeName: employee.name,
-                clockIn: empData.clockIn,
-                clockOut: empData.clockOut,
-                notes: `ซิงค์จากเครื่องสแกนนิ้ว (จำลอง)`,
-                source: 'Scanner',
-            });
-            logsAddedCount++;
-        }
-    }
-    
-    setScannerSyncMessage(`ซิงค์สำเร็จ! เพิ่ม ${logsAddedCount} รายการ. ${unknownScans > 0 ? `ไม่พบ ${unknownScans} รหัสสแกน.` : ''}`);
+    setScannerSyncMessage("ซิงค์สำเร็จ! (จำลอง)");
     setIsSyncingScanner(false);
     await fetchAllData(); 
     setTimeout(() => setScannerSyncMessage(null), 5000); 
   };
 
-
   const employeeColumns: TableColumn<Employee>[] = [
     { header: 'รูปภาพ', accessor: (item) => <img src={item.profileImageUrl || `https://picsum.photos/seed/${item.id}/40/40`} alt={item.name} className="h-10 w-10 rounded-full" />, className:"w-16" },
-    { header: 'รหัส', accessor: 'employeeCode'},
-    { header: 'ชื่อ-นามสกุล', accessor: 'name' },
-    { header: 'แผนก', accessor: 'department' },
-    { header: 'ตำแหน่ง', accessor: 'position' },
+    { header: 'รหัส', accessor: 'employeeCode'}, { header: 'ชื่อ-นามสกุล', accessor: 'name' }, { header: 'แผนก', accessor: 'department' }, { header: 'ตำแหน่ง', accessor: 'position' },
     { header: 'สถานะ', accessor: (item) => <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${item.status === 'Active' ? 'bg-green-100 text-green-800' : item.status === 'On Leave' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{EMPLOYEE_STATUSES_TH[item.status as keyof typeof EMPLOYEE_STATUSES_TH] || item.status}</span> },
     { header: 'วันที่เริ่มงาน', accessor: (item) => new Date(item.hireDate).toLocaleDateString('th-TH') },
     { header: 'การดำเนินการ', accessor: (item) => (
@@ -359,73 +287,36 @@ export const EmployeePage: React.FC = () => {
             <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} title="ลบพนักงาน"><TrashIcon className="h-4 w-4 text-red-500"/></Button>
           </>
         )}
-         {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
-             <Button variant="ghost" size="sm" onClick={() => handleOpenTimeLogModal(item)} title="บันทึกเวลา (ด้วยตนเอง)"><ClockIcon className="h-4 w-4 text-primary-500"/></Button>
-         )}
+         {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button variant="ghost" size="sm" onClick={() => handleOpenTimeLogModal(item)} title="บันทึกเวลา (ด้วยตนเอง)"><ClockIcon className="h-4 w-4 text-primary-500"/></Button>)}
         <Button variant="ghost" size="sm" onClick={() => handleOpenViewLogsModal(item)} title="ดูประวัติการลงเวลา">ดูประวัติ</Button>
       </div>
     )},
   ];
 
   const timeLogColumns: TableColumn<TimeLog>[] = [
-    { header: 'พนักงาน', accessor: 'employeeName'},
-    { header: 'เวลาเข้างาน', accessor: (item) => new Date(item.clockIn).toLocaleString('th-TH') },
-    { header: 'เวลาออกงาน', accessor: (item) => item.clockOut ? new Date(item.clockOut).toLocaleString('th-TH') : 'N/A' },
-    { header: 'ระยะเวลา', accessor: (item) => {
-        if (!item.clockOut) return 'N/A';
-        const durationMs = new Date(item.clockOut).getTime() - new Date(item.clockIn).getTime();
-        const hours = Math.floor(durationMs / (1000 * 60 * 60));
-        const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-        return `${hours} ชม. ${minutes} นาที`;
-    }},
-    { header: 'แหล่งที่มา', accessor: (item) => item.source === 'Scanner' ? <span className="text-blue-600">สแกนนิ้ว</span> : 'ด้วยตนเอง' },
-    { header: 'หมายเหตุ', accessor: 'notes' },
+    { header: 'พนักงาน', accessor: 'employeeName'}, { header: 'เวลาเข้างาน', accessor: (item) => new Date(item.clockIn).toLocaleString('th-TH') }, { header: 'เวลาออกงาน', accessor: (item) => item.clockOut ? new Date(item.clockOut).toLocaleString('th-TH') : 'N/A' },
+    { header: 'ระยะเวลา', accessor: (item) => { if (!item.clockOut) return 'N/A'; const durationMs = new Date(item.clockOut).getTime() - new Date(item.clockIn).getTime(); const hours = Math.floor(durationMs / (1000 * 60 * 60)); const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60)); return `${hours} ชม. ${minutes} นาที`; }},
+    { header: 'แหล่งที่มา', accessor: (item) => item.source === 'Scanner' ? <span className="text-blue-600">สแกนนิ้ว</span> : 'ด้วยตนเอง' }, { header: 'หมายเหตุ', accessor: 'notes' },
   ];
-
 
   if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   const availableAllowanceComponents = payrollComponents.filter(pc => pc.type === 'Allowance' && !pc.isSystemCalculated);
   const availableDeductionComponents = payrollComponents.filter(pc => pc.type === 'Deduction' && !pc.isSystemCalculated);
 
-  const hasUserAccount = editingEmployeeId ? MOCK_USERS.some(u => u.id === editingEmployeeId) : false;
-
   return (
     <div className="space-y-6">
-      <Card 
-        title="จัดการข้อมูลพนักงาน"
-        actions={
-            <div className="flex space-x-2">
-                {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (
-                    <Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}>
-                       {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"}
-                    </Button>
-                )}
-                <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button>
-                {user?.role === UserRole.ADMIN && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>}
-            </div>
-        }
-      >
-        {scannerSyncMessage && (
-          <div className={`mb-4 p-3 rounded-md text-sm ${scannerSyncMessage.includes("สำเร็จ") ? 'bg-green-50 text-green-700' : scannerSyncMessage.includes("ข้อผิดพลาด") ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
-            {scannerSyncMessage}
-          </div>
-        )}
+      <Card title="จัดการข้อมูลพนักงาน" actions={ <div className="flex space-x-2"> {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}> {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"} </Button>)} <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button> {user?.role === UserRole.ADMIN && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>} </div> }>
+        {scannerSyncMessage && (<div className={`mb-4 p-3 rounded-md text-sm ${scannerSyncMessage.includes("สำเร็จ") ? 'bg-green-50 text-green-700' : scannerSyncMessage.includes("ข้อผิดพลาด") ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}> {scannerSyncMessage} </div>)}
         <Table columns={employeeColumns} data={employees} isLoading={isLoading} emptyMessage="ไม่พบข้อมูลพนักงาน"/>
       </Card>
-
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingEmployeeId ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'} size="xl">
         <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                <button onClick={() => setActiveTab('details')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'details' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
-                ข้อมูลทั่วไปและส่วนตัว
-                </button>
-                <button onClick={() => setActiveTab('payroll')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'payroll' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
-                ข้อมูลเงินเดือนและสวัสดิการ
-                </button>
+                <button onClick={() => setActiveTab('details')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'details' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>ข้อมูลทั่วไปและส่วนตัว</button>
+                <button onClick={() => setActiveTab('payroll')} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'payroll' ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>ข้อมูลเงินเดือนและสวัสดิการ</button>
             </nav>
         </div>
-
         {activeTab === 'details' && (
             <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -447,9 +338,6 @@ export const EmployeePage: React.FC = () => {
                     <Input label="เลขที่หนังสือเดินทาง" name="passportNumber" value={currentEmployee.passportNumber || ''} onChange={handleChange} />
                     <Input label="หนังสือเดินทางหมดอายุ" name="passportExpiryDate" type="date" value={currentEmployee.passportExpiryDate?.split('T')[0] || ''} onChange={handleChange} />
                  </div>
-                <div className="mt-4">
-                    <Textarea label="หมายเหตุ (ภายใน)" name="internalNotes" value={(currentEmployee as any).internalNotes || ''} onChange={handleChange} placeholder="หมายเหตุเพิ่มเติมเกี่ยวกับพนักงาน..."/>
-                </div>
             </>
         )}
         {activeTab === 'payroll' && (
@@ -467,15 +355,9 @@ export const EmployeePage: React.FC = () => {
                     <h4 className="text-md font-semibold mb-2">รายการเงินได้ประจำ</h4>
                     {(currentEmployee.recurringAllowances || []).map((allowance, index) => (
                         <div key={`allow-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
-                            <div className="col-span-6">
-                                <Select label={index === 0 ? "ประเภทเงินได้" : undefined} value={allowance.payrollComponentId} onChange={(e) => handleRecurringItemChange('allowance', index, 'payrollComponentId', e.target.value)} options={availableAllowanceComponents.map(c => ({value: c.id, label: c.name}))} placeholder="เลือกประเภท"/>
-                            </div>
-                            <div className="col-span-4">
-                                <Input label={index === 0 ? "จำนวนเงิน (บาท)" : undefined} type="number" value={allowance.amount} onChange={(e) => handleRecurringItemChange('allowance', index, 'amount', e.target.value)} />
-                            </div>
-                            <div className="col-span-2">
-                                <Button variant="danger" size="sm" onClick={() => removeRecurringItem('allowance', index)} className="w-full"><TrashIcon className="h-4 w-4 mx-auto"/></Button>
-                            </div>
+                            <div className="col-span-6"><Select label={index === 0 ? "ประเภทเงินได้" : undefined} value={allowance.payrollComponentId} onChange={(e) => handleRecurringItemChange('allowance', index, 'payrollComponentId', e.target.value)} options={availableAllowanceComponents.map(c => ({value: c.id, label: c.name}))} placeholder="เลือกประเภท"/></div>
+                            <div className="col-span-4"><Input label={index === 0 ? "จำนวนเงิน (บาท)" : undefined} type="number" value={allowance.amount} onChange={(e) => handleRecurringItemChange('allowance', index, 'amount', e.target.value)} /></div>
+                            <div className="col-span-2"><Button variant="danger" size="sm" onClick={() => removeRecurringItem('allowance', index)} className="w-full"><TrashIcon className="h-4 w-4 mx-auto"/></Button></div>
                         </div>
                     ))}
                     <Button variant="secondary" size="sm" onClick={() => addRecurringItem('allowance')} leftIcon={<PlusIcon className="h-4"/>}>เพิ่มเงินได้ประจำ</Button>
@@ -484,38 +366,25 @@ export const EmployeePage: React.FC = () => {
                     <h4 className="text-md font-semibold mb-2">รายการเงินหักประจำ</h4>
                     {(currentEmployee.recurringDeductions || []).map((deduction, index) => (
                         <div key={`deduct-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
-                           <div className="col-span-6">
-                                <Select label={index === 0 ? "ประเภทเงินหัก" : undefined} value={deduction.payrollComponentId} onChange={(e) => handleRecurringItemChange('deduction', index, 'payrollComponentId', e.target.value)} options={availableDeductionComponents.map(c => ({value: c.id, label: c.name}))} placeholder="เลือกประเภท"/>
-                            </div>
-                            <div className="col-span-4">
-                                <Input label={index === 0 ? "จำนวนเงิน (บาท)" : undefined} type="number" value={deduction.amount} onChange={(e) => handleRecurringItemChange('deduction', index, 'amount', e.target.value)} />
-                            </div>
-                            <div className="col-span-2">
-                                <Button variant="danger" size="sm" onClick={() => removeRecurringItem('deduction', index)} className="w-full"><TrashIcon className="h-4 w-4 mx-auto"/></Button>
-                            </div>
+                           <div className="col-span-6"><Select label={index === 0 ? "ประเภทเงินหัก" : undefined} value={deduction.payrollComponentId} onChange={(e) => handleRecurringItemChange('deduction', index, 'payrollComponentId', e.target.value)} options={availableDeductionComponents.map(c => ({value: c.id, label: c.name}))} placeholder="เลือกประเภท"/></div>
+                           <div className="col-span-4"><Input label={index === 0 ? "จำนวนเงิน (บาท)" : undefined} type="number" value={deduction.amount} onChange={(e) => handleRecurringItemChange('deduction', index, 'amount', e.target.value)} /></div>
+                           <div className="col-span-2"><Button variant="danger" size="sm" onClick={() => removeRecurringItem('deduction', index)} className="w-full"><TrashIcon className="h-4 w-4 mx-auto"/></Button></div>
                         </div>
                     ))}
                     <Button variant="secondary" size="sm" onClick={() => addRecurringItem('deduction')} leftIcon={<PlusIcon className="h-4"/>}>เพิ่มเงินหักประจำ</Button>
                 </div>
             </div>
         )}
-
-        {!hasUserAccount && user?.role === UserRole.ADMIN && (
-            <div className="mt-6 border-t pt-4">
-                <h4 className="text-md font-semibold mb-2 text-primary-700">ตั้งค่าบัญชีผู้ใช้</h4>
-                <label className="flex items-center cursor-pointer">
-                    <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500" />
-                    <span className="ml-2 text-sm font-medium text-gray-700">สร้างบัญชีผู้ใช้สำหรับพนักงานคนนี้</span>
-                </label>
-                {createAccount && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 p-4 bg-primary-50 rounded-lg">
-                        <Input label="ชื่อผู้ใช้ (Username)" name="username" value={accountDetails.username} onChange={handleAccountChange} required />
-                        <Input label="รหัสผ่าน" name="password" type="password" value={accountDetails.password} onChange={handleAccountChange} required autoComplete="new-password"/>
-                    </div>
-                )}
+        {user?.role === UserRole.ADMIN && !hasUserAccount && (
+            <div className="mt-4 p-4 bg-yellow-50 rounded-lg text-sm text-yellow-800">
+                <strong>หมายเหตุ:</strong> หากต้องการสร้างบัญชีผู้ใช้สำหรับพนักงานคนนี้ กรุณาไปที่ Supabase Dashboard ของคุณในส่วน Authentication {'>'} Users.
             </div>
         )}
-
+        {user?.role === UserRole.ADMIN && hasUserAccount && (
+            <div className="mt-4 p-4 bg-green-50 rounded-lg text-sm text-green-800">
+                <strong>บัญชีผู้ใช้:</strong> พนักงานคนนี้มีบัญชีผู้ใช้ในระบบแล้ว ({accountDetails.username}).
+            </div>
+        )}
         <div className="mt-6 flex justify-end space-x-2">
           <Button variant="secondary" onClick={handleCloseModal}>ยกเลิก</Button>
           <Button onClick={handleSubmit}>{editingEmployeeId ? 'บันทึกการเปลี่ยนแปลง' : 'เพิ่มพนักงาน'}</Button>
@@ -536,17 +405,10 @@ export const EmployeePage: React.FC = () => {
 
        {selectedEmployeeForLogs && (
         <Modal isOpen={isViewLogsModalOpen} onClose={handleCloseViewLogsModal} title={`ประวัติการลงเวลาของ ${selectedEmployeeForLogs.name}`} size="xl">
-            <Table 
-                columns={timeLogColumns} 
-                data={getEmployeeTimeLogs(selectedEmployeeForLogs.id)} 
-                emptyMessage="ไม่พบประวัติการลงเวลาสำหรับพนักงานคนนี้"
-            />
-            <div className="mt-6 flex justify-end">
-                <Button variant="secondary" onClick={handleCloseViewLogsModal}>ปิด</Button>
-            </div>
+            <Table columns={timeLogColumns} data={timeLogs} emptyMessage="ไม่พบประวัติการลงเวลาสำหรับพนักงานคนนี้" />
+            <div className="mt-6 flex justify-end"><Button variant="secondary" onClick={handleCloseViewLogsModal}>ปิด</Button></div>
         </Modal>
-      )}
-
+       )}
     </div>
   );
 };

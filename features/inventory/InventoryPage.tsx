@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { InventoryItem, StockTransaction, UserRole } from '../../types';
-import { MOCK_INVENTORY_ITEMS, MOCK_STOCK_TRANSACTIONS, addInventoryItem, updateInventoryItem, deleteInventoryItem, addStockTransaction, getInventoryItemTransactions } from '../../services/mockData';
+import { addInventoryItem, updateInventoryItem, deleteInventoryItem, addStockTransaction, getInventoryItemTransactions, getInventoryItems, getStockTransactions } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -37,7 +37,7 @@ const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 const ArrowUpTrayIcon = (props: React.SVGProps<SVGSVGElement>) => ( 
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-    <path d="M10.75 17.25a.75.75 0 001.5 0V8.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z" />
+    <path d="M10.75 17.25a.75.75 0 001.5 0V8.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25-4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z" />
     <path d="M3.5 7.25a.75.75 0 00-1.5 0v-2.5A2.75 2.75 0 014.75 2h10.5A2.75 2.75 0 0118 4.75v2.5a.75.75 0 00-1.5 0v-2.5c0-.69-.56-1.25-1.25-1.25H4.75c-.69 0-1.25-.56-1.25-1.25v2.5z" />
   </svg>
 );
@@ -48,7 +48,7 @@ const ArrowDownTrayIconExport = (props: React.SVGProps<SVGSVGElement>) => ( // R
 );
 
 
-const initialItemState: Omit<InventoryItem, 'id' | 'lastUpdated'> = {
+const initialItemState: Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'> = {
   name: '', sku: '', category: '', quantity: 0, minStockLevel: 10, unitPrice: 0, supplier: ''
 };
 
@@ -61,8 +61,9 @@ export const InventoryPage: React.FC = () => {
   const [isItemModalOpen, setIsItemModalOpen] = useState(false);
   const [isStockModalOpen, setIsStockModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [itemHistory, setItemHistory] = useState<StockTransaction[]>([]);
 
-  const [currentItem, setCurrentItem] = useState<Omit<InventoryItem, 'id' | 'lastUpdated'> | InventoryItem>(initialItemState);
+  const [currentItem, setCurrentItem] = useState<Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'> | InventoryItem>(initialItemState);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   
   const [stockTransaction, setStockTransaction] = useState<{itemId: string; itemName: string; type: 'IN' | 'OUT'; quantity: number; reason: string}>({ itemId: '', itemName: '', type: 'IN', quantity: 1, reason: STOCK_TRANSACTION_REASONS[0] });
@@ -70,17 +71,21 @@ export const InventoryPage: React.FC = () => {
 
   const fetchInventory = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); 
+    try {
+        const [items, transactions] = await Promise.all([
+            getInventoryItems('General'),
+            getStockTransactions()
+        ]);
 
-    const allItems = MOCK_INVENTORY_ITEMS;
-    const allTrans = MOCK_STOCK_TRANSACTIONS;
+        const generalItemIds = new Set(items.map(item => item.id));
 
-    const generalItems = allItems.filter(item => item.category !== 'อุปกรณ์ IT');
-    const generalItemIds = new Set(generalItems.map(item => item.id));
-
-    setInventory(generalItems.map(item => ({...item, isLowStock: item.quantity < item.minStockLevel})));
-    setAllTransactions(allTrans.filter(t => generalItemIds.has(t.itemId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    setIsLoading(false);
+        setInventory(items);
+        setAllTransactions(transactions.filter(t => generalItemIds.has(t.itemId)).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    } catch (error) {
+        console.error("Failed to fetch general inventory data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -144,20 +149,25 @@ export const InventoryPage: React.FC = () => {
   };
 
   const handleItemSubmit = async () => {
-    if (user?.role === UserRole.STAFF) return; // Staff cannot submit item
-    if (editingItemId) {
-      updateInventoryItem(currentItem as InventoryItem);
-    } else {
-      addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>);
+    if (user?.role === UserRole.STAFF) return;
+    try {
+        if (editingItemId) {
+            await updateInventoryItem(currentItem as InventoryItem);
+        } else {
+            await addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'>);
+        }
+        await fetchInventory();
+        handleCloseItemModal();
+    } catch (error) {
+        console.error("Failed to save inventory item:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลสินค้า");
     }
-    await fetchInventory();
-    handleCloseItemModal();
   };
 
   const handleItemDelete = async (id: string) => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot delete item
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบสินค้านี้? (การดำเนินการนี้จะไม่ส่งผลต่อประวัติการทำธุรกรรม)')) {
-      deleteInventoryItem(id);
+      await deleteInventoryItem(id);
       await fetchInventory();
     }
   };
@@ -181,22 +191,35 @@ export const InventoryPage: React.FC = () => {
         alert("พนักงานไม่สามารถทำรายการรับสินค้าเข้าสต็อกได้");
         return;
     }
-    addStockTransaction({
-      ...stockTransaction,
-      employeeId: user.id,
-      employeeName: user.name,
-    });
-    await fetchInventory(); 
-    handleCloseStockModal();
+    try {
+        await addStockTransaction({
+            ...stockTransaction,
+            employeeId: user.id,
+            employeeName: user.name,
+        });
+        await fetchInventory(); 
+        handleCloseStockModal();
+    } catch (error) {
+        console.error("Failed to add stock transaction:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกธุรกรรม");
+    }
   };
 
-  const handleOpenHistoryModal = (item: InventoryItem) => {
+  const handleOpenHistoryModal = async (item: InventoryItem) => {
     setSelectedItemForHistory(item);
     setIsHistoryModalOpen(true);
+    try {
+        const history = await getInventoryItemTransactions(item.id);
+        setItemHistory(history);
+    } catch (error) {
+        console.error(`Failed to get history for item ${item.id}`, error);
+        setItemHistory([]);
+    }
   };
   const handleCloseHistoryModal = () => {
     setSelectedItemForHistory(null);
     setIsHistoryModalOpen(false);
+    setItemHistory([]);
   };
 
   const handleExportInventory = () => {
@@ -213,6 +236,27 @@ export const InventoryPage: React.FC = () => {
         'สถานะสต็อกต่ำ': item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
     }));
     exportToCsv('general_inventory_data', dataToExport);
+  };
+  
+  const handleExportTransactions = () => {
+    const dataToExport = allTransactions
+      .filter(t => (activeTab === 'in' ? t.type === 'IN' : t.type === 'OUT'))
+      .map(t => ({
+        'วันที่': new Date(t.date).toLocaleString('th-TH'),
+        'ชื่อสินค้า': t.itemName,
+        'ประเภท': STOCK_TRANSACTION_TYPES_TH[t.type],
+        'จำนวน': t.quantity,
+        'เหตุผล': t.reason,
+        'ดำเนินการโดย': t.employeeName || '',
+      }));
+    
+    if (dataToExport.length === 0) {
+        alert("ไม่มีข้อมูลสำหรับส่งออกในแท็บนี้");
+        return;
+    }
+
+    const filename = `general_stock_transactions_${activeTab}_${new Date().toISOString().split('T')[0]}`;
+    exportToCsv(filename, dataToExport);
   };
 
 
@@ -322,7 +366,14 @@ export const InventoryPage: React.FC = () => {
         />
       </Card>
 
-      <Card title="ประวัติธุรกรรมสต็อกทั่วไปล่าสุด">
+      <Card 
+        title="ประวัติธุรกรรมสต็อกทั่วไปล่าสุด"
+        actions={
+            <Button onClick={handleExportTransactions} variant="secondary" leftIcon={<ArrowDownTrayIconExport className="h-5 w-5"/>}>
+                ส่งออก CSV ({activeTab === 'in' ? 'รายการรับเข้า' : 'รายการเบิก/จ่าย'})
+            </Button>
+        }
+      >
         <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                 <button
@@ -395,7 +446,7 @@ export const InventoryPage: React.FC = () => {
         <Modal isOpen={isHistoryModalOpen} onClose={handleCloseHistoryModal} title={`ประวัติสต็อกสำหรับ ${selectedItemForHistory.name}`} size="xl">
            <Table 
             columns={stockTransactionColumns} 
-            data={getInventoryItemTransactions(selectedItemForHistory.id)} 
+            data={itemHistory} 
             emptyMessage="ไม่พบประวัติการทำธุรกรรมสำหรับสินค้านี้"
            />
            <div className="mt-6 flex justify-end">

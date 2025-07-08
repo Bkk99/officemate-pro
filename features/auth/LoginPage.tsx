@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { APP_NAME } from '../../constants'; 
+import { APP_NAME } from '../../constants';
+import { supabase } from '../../lib/supabaseClient';
 
 const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -14,7 +15,7 @@ const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,14 +27,18 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) {
+        setError("Supabase is not configured. Please check the console and configuration files.");
+        return;
+    }
     setError('');
     setIsLoading(true);
-    const success = await login(username, password);
+    const { success, error: authError } = await login(email, password);
     setIsLoading(false);
     if (success) {
       navigate(from, { replace: true });
     } else {
-      setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง (คำใบ้: admin, manager, staff, demo_staff1, demo_staff2 / รหัสผ่านใดก็ได้)');
+      setError(authError || 'An unknown error occurred.');
     }
   };
 
@@ -52,15 +57,16 @@ export const LoginPage: React.FC = () => {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <Input
-              label="ชื่อผู้ใช้"
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
+              label="อีเมล"
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
               required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               disabled={isLoading}
+              placeholder="admin@example.com"
             />
             <Input
               label="รหัสผ่าน"
@@ -68,10 +74,10 @@ export const LoginPage: React.FC = () => {
               name="password"
               type="password"
               autoComplete="current-password"
-              required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
+              placeholder="••••••••"
             />
             {error && (
               <div className="rounded-md bg-red-50 p-4">
@@ -88,14 +94,11 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
             <div>
-              <Button type="submit" variant="primary" className="w-full" disabled={isLoading}>
+              <Button type="submit" variant="primary" className="w-full" disabled={isLoading || !supabase}>
                 {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
               </Button>
             </div>
           </form>
-           <p className="mt-4 text-center text-xs text-gray-500">
-            บัญชีทดลอง: admin, manager, staff, demo_staff1, demo_staff2 (รหัสผ่าน: password หรืออะไรก็ได้)
-          </p>
         </div>
       </div>
     </div>

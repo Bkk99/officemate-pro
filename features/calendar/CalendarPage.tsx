@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { CalendarEvent, User } from '../../types';
-import { MOCK_CALENDAR_EVENTS, MOCK_USERS, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../../services/mockData';
+import { getCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getAllUserProfiles } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -33,22 +33,31 @@ const initialEventState: Omit<CalendarEvent, 'id'> = {
 export const CalendarPage: React.FC = () => {
   const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS); 
+  const [users, setUsers] = useState<User[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentEvent, setCurrentEvent] = useState<Omit<CalendarEvent, 'id'> | CalendarEvent>(initialEventState);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); 
-    setEvents(MOCK_CALENDAR_EVENTS);
-    setIsLoading(false);
+    try {
+        const [eventData, userData] = await Promise.all([
+            getCalendarEvents(),
+            getAllUserProfiles()
+        ]);
+        setEvents(eventData);
+        setUsers(userData);
+    } catch(error) {
+        console.error("Failed to fetch calendar data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+    fetchData();
+  }, [fetchData]);
 
   const handleOpenModal = (event?: CalendarEvent) => {
     if (event) {
@@ -88,26 +97,24 @@ export const CalendarPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const eventData: CalendarEvent = {
-        ...(currentEvent as CalendarEvent), 
-        id: editingEventId || `evt${Date.now()}`, 
-        start: new Date(currentEvent.start).toISOString(),
-        end: new Date(currentEvent.end).toISOString(),
-    };
-
-    if (editingEventId) {
-      updateCalendarEvent(eventData);
-    } else {
-      addCalendarEvent(eventData as Omit<CalendarEvent, 'id'>); 
+    try {
+        if (editingEventId) {
+            await updateCalendarEvent(currentEvent as CalendarEvent);
+        } else {
+            await addCalendarEvent(currentEvent as Omit<CalendarEvent, 'id'>); 
+        }
+        await fetchData();
+        handleCloseModal();
+    } catch (error) {
+        console.error("Failed to save event:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกกิจกรรม");
     }
-    await fetchEvents();
-    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบกิจกรรมนี้?')) {
-      deleteCalendarEvent(id);
-      await fetchEvents();
+      await deleteCalendarEvent(id);
+      await fetchData();
     }
   };
   

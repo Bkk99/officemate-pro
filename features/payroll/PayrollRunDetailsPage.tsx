@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { PayrollRun, Payslip, Employee, PayrollRunStatus, UserRole } from '../../types';
@@ -7,24 +8,23 @@ import {
     getEmployeeById, 
     updatePayrollRun, 
     deletePayslip, 
-    generatePayslipForEmployee, 
     addPayslip, 
     updatePayslip, 
-    MOCK_EMPLOYEES 
-} from '../../services/mockData';
+    getEmployees
+} from '../../services/api';
+import { generatePayslipForEmployee } from './payrollCalculations';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Table, TableColumn } from '../../components/ui/Table';
 import { Select } from '../../components/ui/Select';
-// import { Input } from '../../components/ui/Input'; // Not directly used here anymore
 import { Spinner } from '../../components/ui/Spinner';
 import { PAYROLL_RUN_STATUSES_TH, PAYROLL_RUN_STATUS_OPTIONS, MONTH_OPTIONS, PAYROLL_RUN_STATUS_COLORS, APP_NAME, COMPANY_ADDRESS_MOCK, COMPANY_LOGO_URL_MOCK } from '../../constants';
 import { PayslipView } from './PayslipView';
 import { EditPayslipModal } from './EditPayslipModal'; 
 import { exportToCsv } from '../../utils/export';
 import { useAuth } from '../../contexts/AuthContext';
-import { dispatchPayrollStatusNotification } from '../../services/notificationService'; // New
+import { dispatchPayrollStatusNotification } from '../../services/notificationService';
 
 const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -33,7 +33,7 @@ const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25V4c.827-.05 1.66-.075 2.5-.075zM8.47 9.03a.75.75 0 00-1.084-1.03l-1.5 1.75a.75.75 0 101.084 1.03l1.5-1.75zm3.116-1.03a.75.75 0 00-1.084 1.03l1.5 1.75a.75.75 0 101.084 1.03l-1.5-1.75z" clipRule="evenodd" />
+    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25V4c.827-.05 1.66-.075 2.5-.075zM8.47 9.03a.75.75 0 00-1.084-1.03l-1.5 1.75a.75.75 0 101.084 1.03l1.5-1.75zm3.116-1.03a.75.75 0 00-1.084 1.03l1.5 1.75a.75.75 0 101.084-1.03l-1.5-1.75z" clipRule="evenodd" />
   </svg>
 );
 const EyeIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -71,40 +71,44 @@ export const PayrollRunDetailsPage: React.FC = () => {
   const fetchDetails = useCallback(async () => {
     if (!runId || !user) return;
     setIsLoading(true);
-    // await new Promise(resolve => setTimeout(resolve, 300)); // Simulate delay
-    const run = getPayrollRunById(runId);
-    if (run) {
-      setPayrollRun(run);
-      const allPayslipsForRun = getPayslipsForRun(runId);
-      if (user.role === UserRole.STAFF) {
-        const staffEmployeeRecord = MOCK_EMPLOYEES.find(emp => emp.id === user.id || (emp.name === user.name && emp.department === user.department));
-        setDisplayedPayslips(allPayslipsForRun.filter(p => p.employeeId === staffEmployeeRecord?.id));
-      } else {
-        setDisplayedPayslips(allPayslipsForRun);
-      }
-    } else {
-      navigate('/payroll', {replace: true}); 
+    try {
+        const run = await getPayrollRunById(runId);
+        if (run) {
+            setPayrollRun(run);
+            const allPayslipsForRun = await getPayslipsForRun(runId);
+            if (user.role === UserRole.STAFF) {
+                setDisplayedPayslips(allPayslipsForRun.filter(p => p.employeeId === user.id));
+            } else {
+                setDisplayedPayslips(allPayslipsForRun);
+            }
+        } else {
+            navigate('/payroll', {replace: true}); 
+        }
+    } catch (error) {
+        console.error(`Failed to fetch details for payroll run ${runId}:`, error);
+        navigate('/payroll', {replace: true}); 
+    } finally {
+        setIsLoading(false);
     }
-    setIsLoading(false);
   }, [runId, navigate, user]);
 
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
 
-  const handleViewPayslip = (payslip: Payslip) => {
-    const employee = getEmployeeById(payslip.employeeId);
+  const handleViewPayslip = async (payslip: Payslip) => {
+    const employee = await getEmployeeById(payslip.employeeId);
     setSelectedPayslipForView(payslip);
     setSelectedEmployeeForView(employee || null);
     setIsViewPayslipModalOpen(true);
   };
   
-  const handleOpenEditPayslipModal = (payslip: Payslip) => {
+  const handleOpenEditPayslipModal = async (payslip: Payslip) => {
     if (!payrollRun || payrollRun.status !== PayrollRunStatus.DRAFT) {
         alert("สามารถแก้ไขสลิปได้เฉพาะเมื่อรอบการจ่ายอยู่ในสถานะ 'ฉบับร่าง' เท่านั้น");
         return;
     }
-    const employee = getEmployeeById(payslip.employeeId);
+    const employee = await getEmployeeById(payslip.employeeId);
     if (employee) {
         setSelectedPayslipForEdit(payslip);
         setSelectedEmployeeForEdit(employee);
@@ -114,8 +118,8 @@ export const PayrollRunDetailsPage: React.FC = () => {
     }
   };
 
-  const handleSaveEditedPayslip = (updatedPayslipData: Payslip) => {
-    updatePayslip(updatedPayslipData); 
+  const handleSaveEditedPayslip = async (updatedPayslipData: Payslip) => {
+    await updatePayslip(updatedPayslipData); 
     fetchDetails(); // Re-fetch to update run totals and payslip list
     setIsEditPayslipModalOpen(false);
   };
@@ -124,7 +128,7 @@ export const PayrollRunDetailsPage: React.FC = () => {
   const handleDeletePayslip = async (payslipId: string) => {
     if (!payrollRun || (user && user.role === UserRole.STAFF)) return; 
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบสลิปเงินเดือนนี้?')) {
-        deletePayslip(payslipId);
+        await deletePayslip(payslipId);
         fetchDetails(); // Re-fetch details
     }
   };
@@ -137,15 +141,15 @@ export const PayrollRunDetailsPage: React.FC = () => {
         updatedRunData.dateApproved = new Date().toISOString();
     } else if (newStatus === PayrollRunStatus.PAID && !payrollRun.datePaid) {
         updatedRunData.datePaid = new Date().toISOString();
-        const allPayslipsInRun = getPayslipsForRun(payrollRun.id);
-        allPayslipsInRun.forEach(ps => {
+        const allPayslipsInRun = await getPayslipsForRun(payrollRun.id);
+        for(const ps of allPayslipsInRun) {
             if (!ps.paymentDate) {
-                updatePayslip({...ps, paymentDate: updatedRunData.datePaid});
+                await updatePayslip({...ps, paymentDate: updatedRunData.datePaid});
             }
-        });
+        }
     }
 
-    const updatedRunResult = updatePayrollRun({ ...payrollRun, ...updatedRunData });
+    const updatedRunResult = await updatePayrollRun({ ...payrollRun, ...updatedRunData });
     if (updatedRunResult) {
         setPayrollRun(updatedRunResult);
         // Dispatch notification if status is Approved or Paid
@@ -159,28 +163,29 @@ export const PayrollRunDetailsPage: React.FC = () => {
     await fetchDetails(); 
   };
 
-  const handleRecalculateRun = () => {
+  const handleRecalculateRun = async () => {
     if (!payrollRun || (user && user.role === UserRole.STAFF)) return; 
     if (!window.confirm("การคำนวณใหม่จะลบสลิปเงินเดือนที่มีอยู่ทั้งหมดและสร้างใหม่จากข้อมูลพนักงานล่าสุด คุณแน่ใจหรือไม่?")) return;
 
     // Delete existing payslips for this run
-    [...payrollRun.payslipIds].forEach(pid => deletePayslip(pid)); // Iterate over a copy
+    for (const pid of payrollRun.payslipIds) {
+      await deletePayslip(pid);
+    }
 
-    const activeEmployees = MOCK_EMPLOYEES.filter(emp => emp.status === 'Active' && emp.baseSalary && emp.baseSalary > 0);
+    const activeEmployees = (await getEmployees()).filter(emp => emp.status === 'Active' && emp.baseSalary && emp.baseSalary > 0);
     let totalGross = 0;
     let totalDeductionsRun = 0;
     let totalNet = 0;
     const newPayslipIds: string[] = [];
 
-    activeEmployees.forEach(emp => {
-        // Pass undefined for existingPayslipData to generate a fresh payslip
-        const payslip = generatePayslipForEmployee(emp, payrollRun.periodMonth, payrollRun.periodYear, payrollRun.id, undefined);
-        addPayslip(payslip); // This will also update MOCK_PAYSLIPS
+    for (const emp of activeEmployees) {
+        const payslip = await generatePayslipForEmployee(emp, payrollRun.periodMonth, payrollRun.periodYear, payrollRun.id);
+        await addPayslip(payslip);
         newPayslipIds.push(payslip.id);
         totalGross += payslip.grossPay;
         totalDeductionsRun += payslip.totalDeductions;
         totalNet += payslip.netPay;
-    });
+    }
     
     const updatedRunDetails: PayrollRun = {
         ...payrollRun,
@@ -193,7 +198,7 @@ export const PayrollRunDetailsPage: React.FC = () => {
         dateApproved: undefined,
         datePaid: undefined,
     };
-    updatePayrollRun(updatedRunDetails);
+    await updatePayrollRun(updatedRunDetails);
     fetchDetails(); 
   };
   
