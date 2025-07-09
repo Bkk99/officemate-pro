@@ -1,4 +1,5 @@
-// src/contexts/AuthContext.tsx
+// src/contexts/AuthContext.tsx (เวอร์ชันหุ้มเกราะ)
+
 import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
@@ -13,19 +14,75 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const { data: profile } = await supabase.from('users').select('role').eq('user_id', session.user.id).single();
-        setUser({ id: session.user.id, email: session.user.email || '', role: profile?.role || 'staff' });
-      } else {
+    console.log('[Auth] useEffect triggered. Setting up auth listener.');
+
+    const checkUser = async () => {
+      try {
+        console.log('[Auth] Checking current session...');
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) throw new Error(`Session Error: ${sessionError.message}`);
+        console.log('[Auth] Session data:', session);
+
+        if (session?.user) {
+          console.log(`[Auth] User is logged in. Fetching profile for user ID: ${session.user.id}`);
+          const { data: profile, error: profileError } = await supabase
+            .from('users') // <-- เช็คชื่อตารางให้ดี
+            .select('role') // <-- เช็คชื่อคอลัมน์ให้ดี
+            .eq('user_id', session.user.id) // <-- เช็คชื่อคอลัมน์ให้ดี
+            .single();
+
+          if (profileError && profileError.code !== 'PGRST116') { // PGRST116 = no rows found
+             throw new Error(`Profile Error: ${profileError.message}`);
+          }
+          
+          console.log('[Auth] Profile data from DB:', profile);
+
+          const userToSet = {
+            id: session.user.id,
+            email: session.user.email || '',
+            role: profile?.role || 'staff',
+          };
+          console.log('[Auth] Setting user state:', userToSet);
+          setUser(userToSet);
+
+        } else {
+          console.log('[Auth] No active session. Setting user to null.');
+          setUser(null);
+        }
+      } catch (e) {
+        console.error('[Auth] CRITICAL ERROR during user check:', e);
         setUser(null);
+      } finally {
+        console.log('[Auth] FINALLY BLOCK: Setting isLoading to false.');
+        setIsLoading(false);
       }
-      setIsLoading(false);
+    };
+    
+    checkUser(); // เรียกครั้งแรกเมื่อแอปโหลด
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        console.log('[Auth] Auth state changed!', _event);
+        // เมื่อสถานะเปลี่ยน ก็ให้ checkUser ใหม่ทั้งหมด
+        setIsLoading(true); // กลับไป loading ก่อน
+        checkUser(); 
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      console.log('[Auth] Cleaning up auth listener.');
+      subscription.unsubscribe();
+    };
   }, []);
 
-  return <AuthContext.Provider value={{ user, isLoading }}>{children}</AuthContext.Provider>;
+  // ส่วน login, logout ไม่ได้ใช้แล้วในเวอร์ชัน minimal นี้ แต่ใส่ไว้เผื่อ
+  const login = async () => {};
+  const logout = async () => {};
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading }}>
+        {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => useContext(AuthContext)!;
