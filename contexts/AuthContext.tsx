@@ -17,28 +17,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAndSetUserProfile = async (session: Session | null) => {
+  const fetchAndSetUserProfile = useCallback(async (session: Session | null) => {
     if (session?.user) {
         const authUser = session.user;
-        // This is a workaround for a potential database error (function get_my_claim does not exist)
-        // by fetching user details from the JWT metadata instead of the 'profiles' table.
-        // This assumes the user's role and department are stored in `app_metadata` and name in `user_metadata`.
-        const role = authUser.app_metadata?.role as UserRole || UserRole.STAFF;
-        const name = authUser.user_metadata?.full_name || authUser.email || 'User';
-        const department = authUser.app_metadata?.department;
+        
+        // **Query the profiles table for the latest user data.**
+        // This ensures that any changes made directly in the database (like changing a role)
+        // are immediately reflected in the app upon login or refresh.
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('full_name, role, department')
+            .eq('id', authUser.id)
+            .single();
 
-        setUser({
-            id: authUser.id,
-            username: authUser.email || '',
-            role,
-            name,
-            department,
-        });
+        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is an error state for a logged in user
+            console.error("Error fetching user profile:", error.message);
+            // If we can't fetch the profile, log out the user to prevent inconsistent state
+            await supabase.auth.signOut(); 
+            setUser(null);
+        } else if (profile) {
+            setUser({
+                id: authUser.id,
+                username: authUser.email || '',
+                // Use data from the 'profiles' table, with fallbacks.
+                role: profile.role as UserRole || UserRole.STAFF, 
+                name: profile.full_name || authUser.email || 'User',
+                department: profile.department || undefined,
+            });
+        } else {
+             // This case means a user is authenticated but has no profile. 
+             // This shouldn't happen with the database trigger in place.
+             // We can log them out to be safe.
+             console.error(`User ${authUser.id} is authenticated but has no profile. Logging out.`);
+             await supabase.auth.signOut();
+             setUser(null);
+        }
+
     } else {
         setUser(null);
     }
     setIsLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -57,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchAndSetUserProfile]);
 
   const login = useCallback(async (email: string, password_DUMMY: string) => {
     if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
