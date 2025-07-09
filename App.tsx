@@ -89,11 +89,9 @@ const AppRoutes: React.FC = () => {
 // Component หลักของ App จะทำหน้าที่แค่ห่อ Provider
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
-    </BrowserRouter>
   );
 };
 
