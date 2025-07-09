@@ -1,5 +1,4 @@
 // src/components/Layout.tsx (กลับมาใช้เวอร์ชัน Minimal ที่เคยทำงานได้)
-
 import React, { useState, useEffect } from 'react'; 
 import { NavLink, Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -260,3 +259,76 @@ const Header: React.FC<{ toggleSidebar: () => void; }> = ({ toggleSidebar }) => 
   );
 };
 
+const MarqueeBanner: React.FC<{ text: string | null }> = ({ text }) => {
+    if (!text) return null;
+    const longText = text.length > 100 ? text : `${text} • ${text} • ${text}`;
+  
+    return (
+      <div className="marquee-banner">
+        <div className="marquee-content">{longText}</div>
+      </div>
+    );
+};
+
+export const MainLayout: React.FC = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<string | null>(null);
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToGlobalAnnouncement(setCurrentAnnouncement);
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <div className="flex h-screen bg-secondary-100">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header toggleSidebar={toggleSidebar} />
+        <MarqueeBanner text={currentAnnouncement} />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-secondary-100 p-4 md:p-6 lg:p-8">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+interface ProtectedRouteProps {
+  children: JSX.Element;
+  allowedRoles: UserRole[];
+  hrStaffOverride?: boolean;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, hrStaffOverride }) => {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center text-primary-700"><p>กำลังโหลดแอปพลิเคชัน...</p></div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  let canAccess = allowedRoles.includes(user.role);
+
+  if (hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) { 
+    canAccess = true;
+  }
+
+
+  if (!canAccess) {
+    const currentTopLevelNav = NAV_ITEMS.find(item => location.pathname.startsWith(item.path));
+    if (currentTopLevelNav && currentTopLevelNav.subItems) {
+        const canAccessSubItem = currentTopLevelNav.subItems.some(sub => sub.allowedRoles.includes(user.role));
+        if (canAccessSubItem) { 
+             return children;
+        }
+    }
+    return <Navigate to="/dashboard" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
