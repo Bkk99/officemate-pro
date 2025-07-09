@@ -4,16 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
-import { NAV_ITEMS, APP_NAME, DEPARTMENTS } from '../constants'; // ตรวจสอบว่า import มาครบ
+import { NAV_ITEMS, APP_NAME, NavItem, DEPARTMENTS } from '../constants';
+import { subscribeToGlobalAnnouncement } from '../services/notificationService';
 
-// ไอคอนต่างๆ ที่คุณเคยมี (คัดลอกส่วน SVG เดิมของคุณมาวางตรงนี้)
-const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (/* ... SVG code ... */);
-const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (/* ... SVG code ... */);
-const UserCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (/* ... SVG code ... */);
-const ArrowRightOnRectangleIcon = (props: React.SVGProps<SVGSVGElement>) => (/* ... SVG code ... */);
+// ===================================================================
+// 1. SVG Icons (จากโค้ดเก่าของคุณ)
+// ===================================================================
+const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>);
+const XMarkIcon = (props: React.SVGProps<SVGSVGElement>) => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>);
+const ArrowRightOnRectangleIcon = (props: React.SVGProps<SVGSVGElement>) => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" /></svg>);
+const UserCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}><path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" /></svg>);
 
-
-// ProtectedRoute (เวอร์ชันสมบูรณ์)
+// ===================================================================
+// 2. ProtectedRoute (เวอร์ชันใหม่ที่เรียบง่ายและปลอดภัย)
+// ===================================================================
 interface ProtectedRouteProps {
   children: JSX.Element;
 }
@@ -21,77 +25,107 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
-  if (isLoading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
-  if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center">กำลังตรวจสอบสิทธิ์...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
   return children;
 };
 
-
-// MainLayout (นำโค้ดเก่าของคุณกลับมา แต่ปรับให้ปลอดภัยขึ้น)
-export const MainLayout: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+// ===================================================================
+// 3. MainLayout และ Component ย่อย (นำโค้ดเก่ามาปรับปรุง)
+// ===================================================================
+const Sidebar: React.FC<{ isOpen: boolean; toggleSidebar: () => void; }> = ({ isOpen, toggleSidebar }) => {
   const { user, logout } = useAuth();
 
-  // Guard Clause: ถ้ายังไม่มี user ให้แสดงหน้า Loading เพื่อป้องกัน Error
-  if (!user) {
-    return <div className="flex h-screen items-center justify-center">Initializing user...</div>;
-  }
+  // Guard Clause: ป้องกันไม่ให้ Render ถ้ายังไม่มี user ซึ่งจะแก้ปัญหาหน้าขาว
+  if (!user) return null;
 
-  // Logic การกรองเมนูจากโค้ดเก่าของคุณ
+  // Logic การกรองเมนูจากโค้ดเก่าของคุณ (ปลอดภัยที่จะใช้แล้ว เพราะเรารับประกันว่ามี user)
   const filteredNavItems = NAV_ITEMS.filter(item => {
-    const hrStaffOverride = item.path === '/leave-management' || item.path === '/employee-cards';
-    if (hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) {
-        return true;
+    const isHRStaff = user.role === UserRole.STAFF && user.department === DEPARTMENTS[3];
+    if (item.path === '/leave-management' || item.path === '/employee-cards') { 
+      return item.allowedRoles.includes(user.role) || isHRStaff; 
     }
     return item.allowedRoles.includes(user.role);
   });
 
   return (
-    <div className="flex h-screen bg-gray-200 font-sans">
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black opacity-50 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
-
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-gray-800 text-white transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0`}>
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <Link to="/dashboard" className="text-xl font-bold">{APP_NAME}</Link>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden">
-              <XMarkIcon className="h-6 w-6" />
-            </button>
-          </div>
-          <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-            {filteredNavItems.map(item => (
-              <NavLink key={item.name} to={item.path} className={({ isActive }) => `flex items-center px-4 py-2 text-sm rounded-md ${isActive ? 'bg-gray-900 text-white' : 'text-gray-300 hover:bg-gray-700 hover:text-white'}`}>
-                {/* คุณอาจจะมี Icon ตรงนี้ */}
+    <>
+      {isOpen && <div className="fixed inset-0 z-30 bg-black opacity-50 lg:hidden" onClick={toggleSidebar}></div>}
+      
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-secondary-800 text-white transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0 flex flex-col`}>
+        <div className="flex items-center justify-between h-16 px-4 border-b border-secondary-700 lg:justify-center">
+          <Link to="/dashboard" className="text-xl font-bold text-primary-400">{APP_NAME}</Link>
+          <button onClick={toggleSidebar} className="text-secondary-300 hover:text-white lg:hidden">
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        </div>
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+          {filteredNavItems.map((item) => (
+             <NavLink key={item.name} to={item.path} className={({ isActive }) => `group flex items-center px-2 py-2.5 text-sm font-medium rounded-md transition-colors duration-150 ${isActive ? 'bg-primary-500 text-white' : 'text-secondary-100 hover:bg-secondary-700 hover:text-white'}`}>
+                {/* คุณอาจจะมี logic สำหรับ SubItems และ Icons ที่ซับซ้อนกว่านี้ สามารถนำกลับมาใส่ได้ */}
+                {/* <item.icon className="mr-3 h-5 w-5" /> */}
                 {item.name}
-              </NavLink>
-            ))}
-          </nav>
-          {/* User Profile Section */}
-          <div className="p-4 border-t border-gray-700">
-            <div className="flex items-center">
-              <UserCircleIcon className="h-9 w-9 text-white" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-white">{user.name}</p>
-                <p className="text-xs text-gray-400">{user.role} {user.department ? `(${user.department})` : ''}</p>
-              </div>
+            </NavLink>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-secondary-700">
+            <div className="flex items-center mb-3">
+                <UserCircleIcon className="h-8 w-8 text-secondary-300 mr-2"/>
+                <div>
+                    <p className="text-sm font-medium text-white">{user.name || 'Loading name...'}</p>
+                    <p className="text-xs text-secondary-400">{user.role} {user.department ? `- ${user.department}`: ''}</p>
+                </div>
             </div>
-          </div>
+            <button onClick={logout} className="w-full group flex items-center px-2 py-2 text-sm font-medium rounded-md text-secondary-300 hover:bg-secondary-700 hover:text-white">
+                <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5" />
+                ออกจากระบบ
+            </button>
+        </div>
       </aside>
+    </>
+  );
+};
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        <header className="flex justify-between items-center bg-white p-4 shadow-md lg:justify-end">
-          <button onClick={() => setSidebarOpen(true)} className="text-gray-500 lg:hidden">
+
+const Header: React.FC<{ toggleSidebar: () => void; }> = ({ toggleSidebar }) => {
+  return (
+    <header className="sticky top-0 z-20 bg-white shadow-md">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          <button onClick={toggleSidebar} className="text-gray-500 lg:hidden">
             <Bars3Icon className="h-6 w-6" />
           </button>
-          <button onClick={logout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 flex items-center">
-            <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
-            Logout
-          </button>
-        </header>
+          <div className="flex-1"></div> {/* Spacer */}
+        </div>
+      </div>
+    </header>
+  );
+};
 
-        <main className="flex-1 p-6 overflow-y-auto">
+export const MainLayout: React.FC = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<string | null>(null);
+  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+
+  useEffect(() => {
+    // ใส่ Logic การดึง Announcement ของคุณที่นี่
+    const unsubscribe = subscribeToGlobalAnnouncement(setCurrentAnnouncement);
+    return () => unsubscribe();
+  }, []);
+
+  return (
+    <div className="flex h-screen bg-secondary-100">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header toggleSidebar={toggleSidebar} />
+        {/* คุณสามารถเพิ่ม MarqueeBanner กลับมาได้ถ้าต้องการ */}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-secondary-100 p-4 md:p-6 lg:p-8">
           <Outlet />
         </main>
       </div>
