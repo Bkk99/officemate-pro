@@ -293,6 +293,8 @@ interface ProtectedRouteProps {
   hrStaffOverride?: boolean;
 }
 
+// ในไฟล์ src/components/Layout.tsx
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   allowedRoles, 
@@ -301,29 +303,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
+  // LOG 4, 5, 6: ดูข้อมูลทั้งหมดที่ ProtectedRoute ใช้ในการตัดสินใจ
+  console.log(`[ProtectedRoute] Path: ${location.pathname}`);
+  console.log('[ProtectedRoute] Allowed roles:', allowedRoles);
+  console.log('[ProtectedRoute] Current user state:', user); // <--- อันนี้สำคัญที่สุด!
+
+  // ... (โค้ดที่เหลือเหมือนเดิม) ...
   if (isLoading) {
-    return <div className="flex h-screen items-center justify-center">กำลังตรวจสอบสิทธิ์...</div>;
+    //...
   }
-
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    //...
   }
 
-  let hasAccess = false;
-
-  if (allowedRoles.includes(user.role)) {
-    hasAccess = true;
-  }
-
-  if (!hasAccess && hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) {
-    hasAccess = true;
-  }
-  
-  if (hasAccess) {
-    return children;
-  } else {
-
-    console.warn(`Access Denied: User with role '${user.role}' tried to access a route for '${allowedRoles.join(', ')}'`);
-    return <Navigate to="/unauthorized" replace />; 
-  }
+  // ...
 };
