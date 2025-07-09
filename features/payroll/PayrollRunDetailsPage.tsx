@@ -208,28 +208,47 @@ export const PayrollRunDetailsPage: React.FC = () => {
         alert("ไม่พบสลิปเงินเดือนสำหรับส่งออก");
         return;
     }
+
+    const headerMapping = {
+        id: 'ID สลิป',
+        employeeId: 'ID พนักงาน',
+        employeeName: 'ชื่อพนักงาน',
+        payPeriod: 'รอบการจ่าย',
+        baseSalary: 'เงินเดือนพื้นฐาน',
+        overtimeHours: 'ค่าล่วงเวลาชม.',
+        overtimeRate: 'อัตราค่าล่วงเวลา',
+        overtimePay: 'รวมค่าล่วงเวลา',
+        grossPay: 'รวมเงินได้',
+        taxDeduction: 'หักภาษี',
+        socialSecurityDeduction: 'หักประกันสังคม',
+        providentFundDeduction: 'หักกองทุนสำรองเลี้ยงชีพ',
+        totalDeductions: 'รวมเงินหัก',
+        netPay: 'เงินสุทธิ',
+        bankName: 'ธนาคาร',
+        bankAccountNumber: 'เลขที่บัญชี',
+        paymentDate: 'วันที่จ่าย (สลิป)',
+    };
+
     const dataToExport = displayedPayslips.map(ps => ({
-        'ID สลิป': ps.id,
-        'ID พนักงาน': ps.employeeId,
-        'ชื่อพนักงาน': ps.employeeName,
-        'รอบการจ่าย': ps.payPeriod,
-        'เงินเดือนพื้นฐาน': ps.baseSalary.toFixed(2),
-        'ค่าล่วงเวลาชม.': ps.overtimeHours || 0,
-        'อัตราค่าล่วงเวลา': ps.overtimeRate || 0,
-        'รวมค่าล่วงเวลา': ps.overtimePay ? ps.overtimePay.toFixed(2) : 0,
-        ...ps.allowances.reduce((obj, allow, idx) => ({...obj, [`เงินได้ ${idx+1} (${allow.name})`]: allow.amount.toFixed(2) }), {}),
-        'รวมเงินได้': ps.grossPay.toFixed(2),
-        'หักภาษี': ps.taxDeduction.toFixed(2),
-        'หักประกันสังคม': ps.socialSecurityDeduction.toFixed(2),
-        'หักกองทุนสำรองเลี้ยงชีพ': ps.providentFundDeduction.toFixed(2),
-        ...ps.otherDeductions.reduce((obj, deduct, idx) => ({...obj, [`เงินหักอื่น ${idx+1} (${deduct.name})`]: deduct.amount.toFixed(2) }), {}),
-        'รวมเงินหัก': ps.totalDeductions.toFixed(2),
-        'เงินสุทธิ': ps.netPay.toFixed(2),
-        'ธนาคาร': ps.bankName || '',
-        'เลขที่บัญชี': ps.bankAccountNumber || '',
-        'วันที่จ่าย (สลิป)': ps.paymentDate ? new Date(ps.paymentDate).toLocaleDateString('th-TH') : '',
+        id: ps.id,
+        employeeId: ps.employeeId,
+        employeeName: ps.employeeName,
+        payPeriod: ps.payPeriod,
+        baseSalary: ps.baseSalary.toFixed(2),
+        overtimeHours: ps.overtimeHours || 0,
+        overtimeRate: ps.overtimeRate || 0,
+        overtimePay: ps.overtimePay ? ps.overtimePay.toFixed(2) : '0.00',
+        grossPay: ps.grossPay.toFixed(2),
+        taxDeduction: ps.taxDeduction.toFixed(2),
+        socialSecurityDeduction: ps.socialSecurityDeduction.toFixed(2),
+        providentFundDeduction: ps.providentFundDeduction.toFixed(2),
+        totalDeductions: ps.totalDeductions.toFixed(2),
+        netPay: ps.netPay.toFixed(2),
+        bankName: ps.bankName || '',
+        bankAccountNumber: ps.bankAccountNumber || '',
+        paymentDate: ps.paymentDate ? new Date(ps.paymentDate).toLocaleDateString('th-TH') : '',
     }));
-    exportToCsv(`payslips_run_${runId}`, dataToExport);
+    exportToCsv(`payslips_run_${runId}`, dataToExport, headerMapping);
   };
 
 

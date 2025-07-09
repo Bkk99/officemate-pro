@@ -224,30 +224,43 @@ export const InventoryPage: React.FC = () => {
 
   const handleExportInventory = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
+    
+    const headerMapping = {
+        sku: 'รหัสสินค้า (SKU)',
+        name: 'ชื่อสินค้า',
+        category: 'หมวดหมู่',
+        quantity: 'จำนวนคงเหลือ',
+        minStockLevel: 'สต็อกขั้นต่ำ',
+        unitPrice: 'ราคาต่อหน่วย',
+        supplier: 'ซัพพลายเออร์',
+        lastUpdated: 'อัปเดตล่าสุด',
+        isLowStock: 'สถานะสต็อกต่ำ',
+    };
+
     const dataToExport = inventory.map(item => ({
-        'รหัสสินค้า (SKU)': item.sku,
-        'ชื่อสินค้า': item.name,
-        'หมวดหมู่': item.category,
-        'จำนวนคงเหลือ': item.quantity,
-        'สต็อกขั้นต่ำ': item.minStockLevel,
-        'ราคาต่อหน่วย': item.unitPrice,
-        'ซัพพลายเออร์': item.supplier || '',
-        'อัปเดตล่าสุด': new Date(item.lastUpdated).toLocaleString('th-TH'),
-        'สถานะสต็อกต่ำ': item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
+        sku: item.sku,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        minStockLevel: item.minStockLevel,
+        unitPrice: item.unitPrice,
+        supplier: item.supplier || '',
+        lastUpdated: new Date(item.lastUpdated).toLocaleString('th-TH'),
+        isLowStock: item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
     }));
-    exportToCsv('general_inventory_data', dataToExport);
+    exportToCsv('general_inventory_data', dataToExport, headerMapping);
   };
   
   const handleExportTransactions = () => {
     const dataToExport = allTransactions
       .filter(t => (activeTab === 'in' ? t.type === 'IN' : t.type === 'OUT'))
       .map(t => ({
-        'วันที่': new Date(t.date).toLocaleString('th-TH'),
-        'ชื่อสินค้า': t.itemName,
-        'ประเภท': STOCK_TRANSACTION_TYPES_TH[t.type],
-        'จำนวน': t.quantity,
-        'เหตุผล': t.reason,
-        'ดำเนินการโดย': t.employeeName || '',
+        date: new Date(t.date).toLocaleString('th-TH'),
+        itemName: t.itemName,
+        type: STOCK_TRANSACTION_TYPES_TH[t.type],
+        quantity: t.quantity,
+        reason: t.reason,
+        employeeName: t.employeeName || '',
       }));
     
     if (dataToExport.length === 0) {
@@ -255,8 +268,17 @@ export const InventoryPage: React.FC = () => {
         return;
     }
 
+    const headerMapping = {
+        date: 'วันที่',
+        itemName: 'ชื่อสินค้า',
+        type: 'ประเภท',
+        quantity: 'จำนวน',
+        reason: 'เหตุผล',
+        employeeName: 'ดำเนินการโดย',
+    };
+
     const filename = `general_stock_transactions_${activeTab}_${new Date().toISOString().split('T')[0]}`;
-    exportToCsv(filename, dataToExport);
+    exportToCsv(filename, dataToExport, headerMapping);
   };
 
 

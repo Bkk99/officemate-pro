@@ -1,3 +1,4 @@
+
 // services/api.ts
 import { supabase as supabaseInstance } from '../lib/supabaseClient';
 import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, EmployeeStatusKey, POStatusKey, DocumentStatusKey, DocumentType, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeAllowance, EmployeeDeduction, PayslipItem, ManagedUser, UserRole } from '../types';
@@ -96,6 +97,10 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<E
     const { data, error } = await supabase.from('employees').insert(dbData).select().single();
     return mapEmployeeFromDb(handleSupabaseError({ data, error }, 'addEmployee'));
 };
+export const addBulkEmployees = async (employees: Database['public']['Tables']['employees']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('employees').insert(employees);
+    handleSupabaseError({ data: null, error }, 'addBulkEmployees');
+};
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
     const { id, ...employeeData } = updatedEmployee;
     const dbData: Database['public']['Tables']['employees']['Update'] = {
@@ -180,6 +185,10 @@ export const addInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'las
     const r = handleSupabaseError({ data, error }, 'addInventoryItem');
     return { id: r.id, name: r.name, sku: r.sku, category: r.category, quantity: r.quantity, minStockLevel: r.min_stock_level, unitPrice: r.unit_price, supplier: r.supplier || undefined, lastUpdated: r.last_updated, isLowStock: r.quantity < r.min_stock_level };
 };
+export const addBulkInventoryItems = async (items: Database['public']['Tables']['inventory_items']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('inventory_items').insert(items);
+    handleSupabaseError({ data: null, error }, 'addBulkInventoryItems');
+};
 export const updateInventoryItem = async (updatedItem: InventoryItem): Promise<InventoryItem> => {
     const { id, ...itemData } = updatedItem;
     const dbData: Database['public']['Tables']['inventory_items']['Update'] = { name: itemData.name, sku: itemData.sku, category: itemData.category, quantity: itemData.quantity, min_stock_level: itemData.minStockLevel, unit_price: itemData.unitPrice, supplier: itemData.supplier || null };
@@ -211,6 +220,10 @@ export const addPurchaseOrder = async (poData: Omit<PurchaseOrder, 'id'>): Promi
     const { data, error } = await supabase.from('purchase_orders').insert(dbData).select().single();
     return mapPoFromDb(handleSupabaseError({ data, error }, 'addPurchaseOrder'));
 };
+export const addBulkPurchaseOrders = async (pos: Database['public']['Tables']['purchase_orders']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('purchase_orders').insert(pos);
+    handleSupabaseError({ data: null, error }, 'addBulkPurchaseOrders');
+};
 export const updatePurchaseOrder = async (po: PurchaseOrder): Promise<PurchaseOrder> => {
     const { id, ...rest } = po;
     const dbData: Database['public']['Tables']['purchase_orders']['Update'] = { supplier: rest.supplier, items: rest.items as unknown as Json, total_amount: rest.totalAmount, status: rest.status, order_date: rest.orderDate, expected_delivery_date: rest.expectedDeliveryDate || null, notes: rest.notes, po_number: rest.poNumber };
@@ -231,6 +244,10 @@ export const addDocument = async (doc: Omit<Document, 'id'>): Promise<Document> 
     const dbData: Database['public']['Tables']['documents']['Insert'] = { doc_number: doc.docNumber, type: doc.type, client_name: doc.clientName, project_name: doc.projectName || null, date: doc.date, amount: doc.amount || null, status: doc.status, pdf_url: doc.pdfUrl || null };
     const { data, error } = await supabase.from('documents').insert(dbData).select().single();
     return mapDocFromDb(handleSupabaseError({ data, error }, 'addDocument'));
+};
+export const addBulkDocuments = async (docs: Database['public']['Tables']['documents']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('documents').insert(docs);
+    handleSupabaseError({ data: null, error }, 'addBulkDocuments');
 };
 export const updateDocument = async (doc: Document): Promise<Document> => {
     const { id, ...rest } = doc;
@@ -288,6 +305,10 @@ export const addLeaveRequest = async (req: Omit<LeaveRequest, 'id'>): Promise<Le
     const { data, error } = await supabase.from('leave_requests').insert(dbData).select().single();
     return mapLeaveFromDb(handleSupabaseError({data, error}, 'addLeaveRequest'));
 };
+export const addBulkLeaveRequests = async (reqs: Database['public']['Tables']['leave_requests']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('leave_requests').insert(reqs);
+    handleSupabaseError({ data: null, error }, 'addBulkLeaveRequests');
+};
 export const updateLeaveRequest = async (req: LeaveRequest): Promise<LeaveRequest> => {
     const { id, ...rest } = req;
     const dbData: Database['public']['Tables']['leave_requests']['Update'] = { employee_id: rest.employeeId, employee_name: rest.employeeName, leave_type: rest.leaveType, start_date: rest.startDate, end_date: rest.endDate, reason: rest.reason || null, status: rest.status, requested_date: rest.requestedDate, approver_id: rest.approverId || null, approver_name: rest.approverName || null, approved_date: rest.approvedDate || null, notes: rest.notes || null, duration_in_days: rest.durationInDays || null };
@@ -306,6 +327,10 @@ export const addCashAdvanceRequest = async (req: Omit<CashAdvanceRequest, 'id'>)
     const dbData: Database['public']['Tables']['cash_advance_requests']['Insert'] = { employee_id: req.employeeId, employee_name: req.employeeName, employee_code: req.employeeCode || null, request_date: req.requestDate, amount: req.amount, reason: req.reason, status: req.status, approver_id: req.approverId || null, approver_name: req.approverName || null, approval_date: req.approvalDate || null, notes: req.notes || null, payment_date: req.paymentDate || null };
     const { data, error } = await supabase.from('cash_advance_requests').insert(dbData).select().single();
     return mapCashAdvanceFromDb(handleSupabaseError({data, error}, 'addCashAdvanceRequest'));
+};
+export const addBulkCashAdvanceRequests = async (reqs: Database['public']['Tables']['cash_advance_requests']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('cash_advance_requests').insert(reqs);
+    handleSupabaseError({ data: null, error }, 'addBulkCashAdvanceRequests');
 };
 export const updateCashAdvanceRequest = async (req: CashAdvanceRequest): Promise<CashAdvanceRequest> => {
     const { id, ...rest } = req;

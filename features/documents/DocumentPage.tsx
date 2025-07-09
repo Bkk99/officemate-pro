@@ -46,6 +46,14 @@ const initialDocumentState: Omit<Document, 'id' | 'docNumber'> = {
   type: DocumentType.QUOTATION, clientName: '', projectName: '', date: new Date().toISOString().split('T')[0], amount: 0, status: 'Draft', pdfUrl: ''
 };
 
+const DOCUMENT_STATUSES_COLORS: Record<Document['status'], string> = {
+    Draft: 'bg-gray-100 text-gray-800',
+    Sent: 'bg-blue-100 text-blue-800',
+    Paid: 'bg-green-100 text-green-800',
+    Overdue: 'bg-yellow-100 text-yellow-800',
+    Cancelled: 'bg-red-100 text-red-800',
+};
+
 export const DocumentPage: React.FC = () => {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -177,17 +185,27 @@ export const DocumentPage: React.FC = () => {
 
   const handleExportDocuments = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
+    const headerMapping = {
+        docNumber: 'เลขที่เอกสาร',
+        type: 'ประเภท',
+        clientName: 'ชื่อลูกค้า',
+        projectName: 'โครงการ',
+        date: 'วันที่',
+        amount: 'จำนวนเงิน',
+        status: 'สถานะ',
+        pdfUrl: 'ลิงก์ PDF',
+    };
     const dataToExport = filteredDocuments.map(doc => ({
-        'เลขที่เอกสาร': doc.docNumber,
-        'ประเภท': DOCUMENT_TYPES_TH[doc.type],
-        'ชื่อลูกค้า': doc.clientName,
-        'โครงการ': doc.projectName || '',
-        'วันที่': new Date(doc.date).toLocaleDateString('th-TH'),
-        'จำนวนเงิน': doc.amount || 0,
-        'สถานะ': DOCUMENT_STATUSES_TH[doc.status as keyof typeof DOCUMENT_STATUSES_TH] || doc.status,
-        'ลิงก์ PDF': doc.pdfUrl || '',
+        docNumber: doc.docNumber,
+        type: DOCUMENT_TYPES_TH[doc.type],
+        clientName: doc.clientName,
+        projectName: doc.projectName || '',
+        date: new Date(doc.date).toLocaleDateString('th-TH'),
+        amount: doc.amount || 0,
+        status: DOCUMENT_STATUSES_TH[doc.status as keyof typeof DOCUMENT_STATUSES_TH] || doc.status,
+        pdfUrl: doc.pdfUrl || '',
     }));
-    exportToCsv(`${activeTab.toLowerCase()}_documents_data`, dataToExport);
+    exportToCsv(`${activeTab.toLowerCase()}_documents_data`, dataToExport, headerMapping);
   };
 
 
@@ -214,14 +232,6 @@ export const DocumentPage: React.FC = () => {
     )},
   ];
   
-  const DOCUMENT_STATUSES_COLORS: Record<Document['status'], string> = {
-    Draft: 'bg-gray-100 text-gray-800',
-    Sent: 'bg-blue-100 text-blue-800',
-    Paid: 'bg-green-100 text-green-800',
-    Overdue: 'bg-yellow-100 text-yellow-800',
-    Cancelled: 'bg-red-100 text-red-800',
-  };
-
   if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   return (

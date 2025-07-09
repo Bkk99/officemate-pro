@@ -289,22 +289,37 @@ export const LeaveManagementPage: React.FC = () => {
   });
   
   const handleExportLeaves = () => {
+    const headerMapping = {
+        id: 'ID คำขอ',
+        employeeId: 'รหัสพนักงาน',
+        employeeName: 'ชื่อพนักงาน',
+        leaveType: 'ประเภทการลา',
+        startDate: 'วันที่เริ่มลา',
+        endDate: 'วันที่สิ้นสุดลา',
+        durationInDays: 'จำนวนวัน',
+        reason: 'เหตุผล',
+        status: 'สถานะ',
+        requestedDate: 'วันที่ยื่นขอ',
+        approverName: 'ผู้อนุมัติ',
+        approvedDate: 'วันที่อนุมัติ/ปฏิเสธ',
+        notes: 'หมายเหตุ (ผู้ดูแล)',
+    };
     const dataToExport = filteredRequestsForTable.map(req => ({
-        'ID คำขอ': req.id,
-        'รหัสพนักงาน': req.employeeId,
-        'ชื่อพนักงาน': req.employeeName,
-        'ประเภทการลา': LEAVE_TYPES_TH[req.leaveType as LeaveType],
-        'วันที่เริ่มลา': new Date(req.startDate).toLocaleDateString('th-TH'),
-        'วันที่สิ้นสุดลา': new Date(req.endDate).toLocaleDateString('th-TH'),
-        'จำนวนวัน': req.durationInDays,
-        'เหตุผล': req.reason || '',
-        'สถานะ': LEAVE_REQUEST_STATUS_TH[req.status as LeaveRequestStatus],
-        'วันที่ยื่นขอ': new Date(req.requestedDate).toLocaleDateString('th-TH'),
-        'ผู้อนุมัติ': req.approverName || '',
-        'วันที่อนุมัติ/ปฏิเสธ': req.approvedDate ? new Date(req.approvedDate).toLocaleDateString('th-TH') : '',
-        'หมายเหตุ (ผู้ดูแล)': req.notes || '',
+        id: req.id,
+        employeeId: req.employeeId,
+        employeeName: req.employeeName,
+        leaveType: LEAVE_TYPES_TH[req.leaveType as LeaveType],
+        startDate: new Date(req.startDate).toLocaleDateString('th-TH'),
+        endDate: new Date(req.endDate).toLocaleDateString('th-TH'),
+        durationInDays: req.durationInDays || 0,
+        reason: req.reason || '',
+        status: LEAVE_REQUEST_STATUS_TH[req.status as LeaveRequestStatus],
+        requestedDate: new Date(req.requestedDate).toLocaleDateString('th-TH'),
+        approverName: req.approverName || '',
+        approvedDate: req.approvedDate ? new Date(req.approvedDate).toLocaleDateString('th-TH') : '',
+        notes: req.notes || '',
     }));
-    exportToCsv('leave_requests_data', dataToExport);
+    exportToCsv('leave_requests_data', dataToExport, headerMapping);
   };
 
   const columns: TableColumn<LeaveRequest>[] = [

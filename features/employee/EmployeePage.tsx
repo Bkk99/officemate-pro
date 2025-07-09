@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User } from '../../types';
+import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User, Database, EmployeeStatusKey } from '../../types';
 import { 
     getEmployees, addEmployee, updateEmployee, deleteEmployee, 
     addTimeLog, getEmployeeTimeLogs, getPayrollComponents,
-    saveSetting, getSetting
+    saveSetting, getSetting, addBulkEmployees
 } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -15,7 +16,8 @@ import { DEPARTMENTS, POSITIONS, EMPLOYEE_STATUSES_OPTIONS, EMPLOYEE_STATUSES_TH
 import { useAuth } from '../../contexts/AuthContext';
 import { Spinner } from '../../components/ui/Spinner';
 import { TableColumn } from '../../components/ui/Table'; 
-import { exportToCsv } from '../../utils/export';
+import { exportToCsv, parseCsvFile } from '../../utils/export';
+import { ImportCsvModal } from '../../components/ui/ImportCsvModal';
 
 const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -47,6 +49,31 @@ const ArrowPathIcon = (props: React.SVGProps<SVGSVGElement>) => (
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
     </svg>
 );
+const ArrowUpTrayIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+    </svg>
+);
+
+const employeeCsvHeaderMapping = {
+    name: 'ชื่อ-นามสกุล (ไทย)',
+    nameEn: 'ชื่อ-นามสกุล (อังกฤษ)',
+    employeeCode: 'รหัสพนักงาน',
+    email: 'อีเมล',
+    phone: 'เบอร์โทรศัพท์',
+    department: 'แผนก',
+    position: 'ตำแหน่ง',
+    status: 'สถานะ',
+    hireDate: 'วันที่เริ่มงาน (YYYY-MM-DD)',
+    baseSalary: 'เงินเดือนพื้นฐาน',
+    bankName: 'ชื่อธนาคาร',
+    bankAccountNumber: 'เลขบัญชีธนาคาร',
+    taxId: 'เลขประจำตัวผู้เสียภาษี',
+    socialSecurityNumber: 'เลขประกันสังคม',
+    fingerprintScannerId: 'รหัสสแกนนิ้ว',
+    passportNumber: 'เลขที่หนังสือเดินทาง',
+    passportExpiryDate: 'หนังสือเดินทางหมดอายุ (YYYY-MM-DD)',
+};
 
 
 const initialEmployeeState: Omit<Employee, 'id'> = {
@@ -73,6 +100,7 @@ export const EmployeePage: React.FC = () => {
 
   const [isSyncingScanner, setIsSyncingScanner] = useState(false);
   const [scannerSyncMessage, setScannerSyncMessage] = useState<string | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -237,9 +265,68 @@ export const EmployeePage: React.FC = () => {
   
   const handleExportEmployees = () => {
     const dataToExport = employees.map(emp => ({
-        'รหัสพนักงาน': emp.employeeCode || '', 'ชื่อ-นามสกุล (ไทย)': emp.name, 'ชื่อ-นามสกุล (อังกฤษ)': emp.nameEn || '', 'อีเมล': emp.email, 'เบอร์โทรศัพท์': emp.phone, 'แผนก': emp.department, 'ตำแหน่ง': emp.position, 'สถานะ': EMPLOYEE_STATUSES_TH[emp.status as keyof typeof EMPLOYEE_STATUSES_TH] || emp.status, 'วันที่เริ่มงาน': new Date(emp.hireDate).toLocaleDateString('th-TH'), 'เลขที่หนังสือเดินทาง': emp.passportNumber || '', 'หนังสือเดินทางหมดอายุ': emp.passportExpiryDate ? new Date(emp.passportExpiryDate).toLocaleDateString('th-TH') : '', 'รหัสสแกนนิ้ว': emp.fingerprintScannerId || '', 'เงินเดือนพื้นฐาน': emp.baseSalary || 0, 'ชื่อธนาคาร': emp.bankName || '', 'เลขบัญชีธนาคาร': emp.bankAccountNumber || '', 'เลขประจำตัวผู้เสียภาษี': emp.taxId || '', 'เลขประกันสังคม': emp.socialSecurityNumber || '', 'อัตรากองทุนสำรองเลี้ยงชีพ (ลูกจ้าง %)': emp.providentFundRateEmployee || 0, 'อัตรากองทุนสำรองเลี้ยงชีพ (นายจ้าง %)': emp.providentFundRateEmployer || 0,
+        name: emp.name,
+        nameEn: emp.nameEn || '',
+        employeeCode: emp.employeeCode || '',
+        email: emp.email,
+        phone: emp.phone,
+        department: emp.department,
+        position: emp.position,
+        status: EMPLOYEE_STATUSES_TH[emp.status as keyof typeof EMPLOYEE_STATUSES_TH] || emp.status,
+        hireDate: emp.hireDate.split('T')[0],
+        baseSalary: emp.baseSalary || 0,
+        bankName: emp.bankName || '',
+        bankAccountNumber: emp.bankAccountNumber || '',
+        taxId: emp.taxId || '',
+        socialSecurityNumber: emp.socialSecurityNumber || '',
+        fingerprintScannerId: emp.fingerprintScannerId || '',
+        passportNumber: emp.passportNumber || '',
+        passportExpiryDate: emp.passportExpiryDate ? emp.passportExpiryDate.split('T')[0] : '',
     }));
-    exportToCsv('employees_data', dataToExport);
+    exportToCsv('employees_data', dataToExport, employeeCsvHeaderMapping);
+  };
+
+  const handleImportEmployees = async (parsedData: any[]): Promise<{success: boolean, message: string}> => {
+    try {
+        const employeesToInsert: Database['public']['Tables']['employees']['Insert'][] = parsedData.map((row, index) => {
+            const thaiName = row[employeeCsvHeaderMapping.name];
+            if (!thaiName) {
+                throw new Error(`แถวที่ ${index + 2}: ไม่พบข้อมูล 'ชื่อ-นามสกุล (ไทย)' ซึ่งเป็นข้อมูลบังคับ`);
+            }
+
+            const statusKey = Object.keys(EMPLOYEE_STATUSES_TH).find(key => EMPLOYEE_STATUSES_TH[key as EmployeeStatusKey] === row[employeeCsvHeaderMapping.status]) || 'Active';
+            
+            return {
+                name: thaiName,
+                name_en: row[employeeCsvHeaderMapping.nameEn] || null,
+                employee_code: row[employeeCsvHeaderMapping.employeeCode] || null,
+                email: row[employeeCsvHeaderMapping.email] || `user${Date.now()+index}@example.com`,
+                phone: row[employeeCsvHeaderMapping.phone] || '',
+                department: row[employeeCsvHeaderMapping.department] || DEPARTMENTS[0],
+                position: row[employeeCsvHeaderMapping.position] || POSITIONS[0],
+                status: statusKey as EmployeeStatusKey,
+                hire_date: new Date(row[employeeCsvHeaderMapping.hireDate] || Date.now()).toISOString(),
+                base_salary: parseFloat(row[employeeCsvHeaderMapping.baseSalary]) || 0,
+                bank_name: row[employeeCsvHeaderMapping.bankName] || null,
+                bank_account_number: row[employeeCsvHeaderMapping.bankAccountNumber] || null,
+                tax_id: row[employeeCsvHeaderMapping.taxId] || null,
+                social_security_number: row[employeeCsvHeaderMapping.socialSecurityNumber] || null,
+                fingerprint_scanner_id: row[employeeCsvHeaderMapping.fingerprintScannerId] || null,
+                passport_number: row[employeeCsvHeaderMapping.passportNumber] || null,
+                passport_expiry_date: row[employeeCsvHeaderMapping.passportExpiryDate] ? new Date(row[employeeCsvHeaderMapping.passportExpiryDate]).toISOString() : null,
+            };
+        });
+
+        if (employeesToInsert.length > 0) {
+            await addBulkEmployees(employeesToInsert);
+        }
+        
+        await fetchAllData();
+        return { success: true, message: `นำเข้าสำเร็จ! เพิ่มพนักงานใหม่ ${employeesToInsert.length} คน` };
+    } catch (error: any) {
+        console.error(error);
+        return { success: false, message: `การนำเข้าล้มเหลว: ${error.message}` };
+    }
   };
 
   const handleSimulateScannerSyncMain = async () => {
@@ -290,10 +377,22 @@ export const EmployeePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card title="จัดการข้อมูลพนักงาน" actions={ <div className="flex space-x-2"> {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}> {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"} </Button>)} <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button> {user?.role === UserRole.ADMIN && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>} </div> }>
+      <Card title="จัดการข้อมูลพนักงาน" actions={ <div className="flex space-x-2"> {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}> {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"} </Button>)} <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button> {user?.role === UserRole.ADMIN && <Button onClick={() => setIsImportModalOpen(true)} variant="secondary" leftIcon={<ArrowUpTrayIcon className="h-5 w-5"/>}>นำเข้า CSV</Button>} {user?.role === UserRole.ADMIN && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>} </div> }>
         {scannerSyncMessage && (<div className={`mb-4 p-3 rounded-md text-sm ${scannerSyncMessage.includes("สำเร็จ") ? 'bg-green-50 text-green-700' : scannerSyncMessage.includes("ข้อผิดพลาด") ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}> {scannerSyncMessage} </div>)}
         <Table columns={employeeColumns} data={employees} isLoading={isLoading} emptyMessage="ไม่พบข้อมูลพนักงาน"/>
       </Card>
+      
+      {user?.role === UserRole.ADMIN && (
+        <ImportCsvModal 
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            onImport={handleImportEmployees}
+            headerMapping={employeeCsvHeaderMapping}
+            templateFilename="employee_import_template.csv"
+            modalTitle="นำเข้าข้อมูลพนักงานจาก CSV"
+        />
+      )}
+
       <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingEmployeeId ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'} size="xl">
         <div className="border-b border-gray-200 mb-4">
             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
