@@ -1,66 +1,44 @@
-// src/contexts/AuthContext.tsx (เวอร์ชัน Minimal)
+// ในไฟล์ src/contexts/AuthContext.tsx ให้แทนที่ useEffect เดิมด้วยอันนี้
 
-import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+useEffect(() => {
+    const updateUserState = async (session: Session | null) => {
+      try {
+        if (session?.user) {
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single();
 
-// สร้าง Type ของ User แบบง่ายๆ
-export interface AppUser {
-  id: string;
-  email: string;
-  role: string;
-}
+          // ถ้ามี Error (เช่น RLS บล็อก) ให้โยน Error ออกไป
+          if (error) throw error;
 
-// Interface สำหรับ Context
-interface AuthContextType {
-  user: AppUser | null;
-  login: (email: string, password_DUMMY: string) => Promise<{ success: boolean }>;
-  logout: () => Promise<void>;
-  isLoading: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        // ดึงข้อมูล Role จากตาราง 'users' ของเรา
-        const { data: profile } = await supabase
-          .from('users')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single();
-
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          role: profile?.role || 'staff' // ถ้าไม่มี role ให้เป็น staff ไปก่อน
-        });
-      } else {
-        setUser(null);
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: profile?.role || 'staff'
+          });
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        setUser(null); // เคลียร์ user ถ้าเกิดปัญหา
+      } finally {
+        // บล็อกนี้จะทำงานเสมอ ไม่ว่าจะสำเร็จหรือล้มเหลว
+        setIsLoading(false);
       }
-      setIsLoading(false);
+    };
+
+    // เรียกครั้งแรกเพื่อเช็ค session ที่อาจมีอยู่
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        updateUserState(session);
+    });
+    
+    // ดักฟังการเปลี่ยนแปลง
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        updateUserState(session);
     });
 
     return () => { authListener.subscription.unsubscribe(); };
-  }, []);
-
-  const login = useCallback(async (email: string, password_DUMMY: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password: password_DUMMY });
-    return { success: !error };
-  }, []);
-
-  const logout = useCallback(async () => { await supabase.auth.signOut(); }, []);
-
-  return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>;
-};
-
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
-};
+}, []);
