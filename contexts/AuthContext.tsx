@@ -64,53 +64,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ส่วน useEffect ไม่ต้องแก้
   useEffect(() => {
     setIsLoading(true);
-    const getSessionAndProfile = async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        await fetchAndSetUserProfile(session);
-    };
+const fetchAndSetUserProfile = useCallback(async (session: Session | null) => {
+    // ใช้ try...catch...finally เพื่อดักจับ Error ทั้งหมด
+    try {
+        if (session?.user) {
+            const authUser = session.user;
+            
+            const { data: profile, error } = await supabase
+                .from('users') 
+                .select('username, role') 
+                .eq('user_id', authUser.id)
+                .single();
 
-    getSessionAndProfile();
+            // ถ้ามี error จาก supabase (เช่น RLS บล็อค) ให้โยน error ออกไป
+            if (error && error.code !== 'PGRST116') {
+                throw error;
+            }
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        // ไม่ต้อง setIsLoading(true) ตรงนี้ เพราะจะทำให้จอกระพริบ
-        await fetchAndSetUserProfile(session);
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
-  }, [fetchAndSetUserProfile]);
-
-  // --- START: แก้ไขส่วน login ---
-  // แก้ไขฟังก์ชัน login ให้รอการอัปเดต state
-  const login = useCallback(async (email: string, password_DUMMY: string) => {
-    if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
-    
-    const passwordToUse = password_DUMMY || '123456';
-
-    const { error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: passwordToUse,
-    });
-    
-    // ไม่ต้อง setIsLoading ที่นี่ onAuthStateChange จะจัดการเอง
-    
-    if (error) {
-        console.error("Supabase login error:", error.message);
-        return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+            if (profile) {
+                // ถ้าเจอโปรไฟล์ ให้ตั้งค่า user
+                setUser({
+                    id: authUser.id,
+                    username: profile.username || authUser.email || '',
+                    role: profile.role as UserRole || UserRole.STAFF, 
+                });
+            } else {
+                // ถ้าไม่เจอโปรไฟล์ (ซึ่งไม่ควรเกิดถ้า trigger ทำงาน) ให้โยน error
+                throw new Error(`Profile not found for user: ${authUser.id}`);
+            }
+        } else {
+            // ถ้าไม่มี session ให้เคลียร์ค่า user
+            setUser(null);
+        }
+    } catch (error) {
+        // ถ้าเกิด Error ใดๆ ใน try block ให้มาทำงานที่นี่
+        console.error("Error fetching user profile:", error);
+        setUser(null); // เคลียร์ค่า user เพื่อความปลอดภัย
+    } finally {
+        // บล็อคนี้จะทำงาน "เสมอ" ไม่ว่า try จะสำเร็จหรือเกิด error
+        // ซึ่งเป็นที่ที่เหมาะที่สุดในการตั้งค่า loading ให้เสร็จสิ้น
+        setIsLoading(false);
     }
-    // เราไม่ต้องทำอะไรต่อ onAuthStateChange จะทำงานและอัปเดต state ให้เอง
-    // การคืนค่า success ที่นี่เป็นเพียงการบอก LoginPage ว่าไม่มี error
-    return { success: true, error: null };
-  }, []);
-  // --- END: แก้ไขส่วน login ---
-
-
-  const logout = useCallback(async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    // ไม่ต้อง setUser และ setIsLoading ที่นี่ onAuthStateChange จัดการให้แล้ว
-  }, []);
+}, []);
   
   // ส่วน updateUserContext ไม่ต้องแก้
   const updateUserContext = useCallback(async (updatedUserData: User) => {
