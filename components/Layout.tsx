@@ -295,26 +295,8 @@ interface ProtectedRouteProps {
 
 // ในไฟล์ src/components/Layout.tsx
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
-  children, 
-  allowedRoles, 
-  hrStaffOverride = false 
-}) => {
-  const { user, isLoading } = useAuth();
-  const location = useLocation();
+// ในเส้นชัยแค่คลิกเดียวเท่านั้นครับ! คลิกที่ลูกศรนั้นแล้วส่งภาพมาให้ผมดูได้เลยครับ!**ไฟล์ src/components/Layout.tsx
 
-  // LOG 4, 5, 6: ดูข้อมูลทั้งหมดที่ ProtectedRoute ใช้ในการตัดสินใจ
-  console.log(`[ProtectedRoute] Path: ${location.pathname}`);
-  console.log('[ProtectedRoute] Allowed roles:', allowedRoles);
-  console.log('[ProtectedRoute] Current user state:', user); // <--- อันนี้สำคัญที่สุด!
+// ... (ส่วน import และ ProtectedRoute ไม่ต้องแก้) ...
 
-  // ... (โค้ดที่เหลือเหมือนเดิม) ...
-  if (isLoading) {
-    //...
-  }
-  if (!user) {
-    //...
-  }
-
-  // ...
-};
+// 
