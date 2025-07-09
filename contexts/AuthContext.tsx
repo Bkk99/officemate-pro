@@ -1,74 +1,62 @@
-// src/contexts/AuthContext.tsx (เวอร์ชันสุดท้าย)
+// src/contexts/AuthContext.tsx (เวอร์ชัน Minimal)
+
 import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { User, UserRole } from '../types';
-import { Session } from '@supabase/supabase-js';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
+// สร้าง Type ของ User แบบง่ายๆ
+export interface AppUser {
+  id: string;
+  email: string;
+  role: string;
+}
+
+// Interface สำหรับ Context
 interface AuthContextType {
-  user: User | null;
-  login: (email: string, password_DUMMY: string) => Promise<{ success: boolean; error: string | null }>;
+  user: AppUser | null;
+  login: (email: string, password_DUMMY: string) => Promise<{ success: boolean }>;
   logout: () => Promise<void>;
   isLoading: boolean;
-  updateUserContext: (updatedUser: User) => void;
 }
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAndSetUserProfile = useCallback(async (session: Session | null) => {
-    try {
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        const authUser = session.user;
-        const { data: profile, error } = await supabase
+        // ดึงข้อมูล Role จากตาราง 'users' ของเรา
+        const { data: profile } = await supabase
           .from('users')
-          .select(`username, role, Employees(first_name, last_name, department)`)
-          .eq('user_id', authUser.id)
+          .select('role')
+          .eq('user_id', session.user.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') throw error;
-
-        if (profile) {
-          const employeeData = Array.isArray(profile.Employees) ? profile.Employees[0] : profile.Employees;
-          const userToSet: User = {
-            id: authUser.id,
-            username: profile.username || authUser.email || '',
-            role: profile.role as UserRole,
-            name: `${employeeData?.first_name || ''} ${employeeData?.last_name || ''}`.trim() || authUser.email || 'N/A',
-            department: employeeData?.department || undefined,
-          };
-          setUser(userToSet);
-        } else {
-          await supabase.auth.signOut();
-        }
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          role: profile?.role || 'staff' // ถ้าไม่มี role ให้เป็น staff ไปก่อน
+        });
       } else {
         setUser(null);
       }
-    } catch (error) {
-      console.error("Error fetching user profile:", error);
-      setUser(null);
-    } finally {
       setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      fetchAndSetUserProfile(session);
     });
+
     return () => { authListener.subscription.unsubscribe(); };
-  }, [fetchAndSetUserProfile]);
+  }, []);
 
   const login = useCallback(async (email: string, password_DUMMY: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: password_DUMMY });
-    return { success: !error, error: error ? "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" : null };
+    return { success: !error };
   }, []);
 
   const logout = useCallback(async () => { await supabase.auth.signOut(); }, []);
-  const updateUserContext = useCallback((updatedUserData: User) => { if (user && user.id === updatedUserData.id) setUser(updatedUserData); }, [user]);
 
-  return <AuthContext.Provider value={{ user, login, logout, isLoading, updateUserContext }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, isLoading }}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = (): AuthContextType => {
