@@ -270,28 +270,23 @@ const MarqueeBanner: React.FC<{ text: string | null }> = ({ text }) => {
     );
 };
 
+// ... (ส่วนอื่นๆ ของไฟล์) ...
+
 export const MainLayout: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentAnnouncement, setCurrentAnnouncement] = useState<string | null>(null);
-  const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
+    // ...
 
-  useEffect(() => {
-    const unsubscribe = subscribeToGlobalAnnouncement(setCurrentAnnouncement);
-    return () => unsubscribe();
-  }, []);
-
-  return (
-    <div className="flex h-screen bg-secondary-100">
-      <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header toggleSidebar={toggleSidebar} />
-        <MarqueeBanner text={currentAnnouncement} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-secondary-100 p-4 md:p-6 lg:p-8">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  );
+    return (
+        <div className="flex h-screen bg-gray-100">
+            {/* ... */}
+            <div className="flex-1 flex flex-col">
+                {/* ... */}
+                <main className="flex-1 p-6 overflow-y-auto">
+                    {/* วางตรงนี้! */}
+                    <Outlet />
+                </main>
+            </div>
+        </div>
+    );
 };
 
 interface ProtectedRouteProps {
