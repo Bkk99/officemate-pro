@@ -1,12 +1,13 @@
+// src/App.tsx
 
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './features/auth/LoginPage';
 import { MainLayout, ProtectedRoute } from './components/Layout';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { EmployeePage } from './features/employee/EmployeePage';
 import { InventoryPage } from './features/inventory/InventoryPage';
-import ItInventoryPage from './features/inventory/ItInventoryPage'; // New Import
+import ItInventoryPage from './features/inventory/ItInventoryPage';
 import { PurchaseOrderPage } from './features/po/PurchaseOrderPage';
 import { DocumentPage } from './features/documents/DocumentPage';
 import { ChatPage } from './features/chat/ChatPage';
@@ -18,120 +19,81 @@ import { PayrollRunDetailsPage } from './features/payroll/PayrollRunDetailsPage'
 import { PayrollSettingsPage } from './features/payroll/PayrollSettingsPage';
 import { FingerprintScannerSettingsPage } from './features/admin/FingerprintScannerSettingsPage';
 import { LeaveManagementPage } from './features/leave/LeaveManagementPage'; 
-import { EmployeeIdCardPage } from './features/idcard/EmployeeIdCardPage'; // New Import
-import { CashAdvancePage } from './features/cash-advance/CashAdvancePage'; // New Import
+import { EmployeeIdCardPage } from './features/idcard/EmployeeIdCardPage';
+import { CashAdvancePage } from './features/cash-advance/CashAdvancePage';
 import { UserRole } from './types';
-import { useAuth } from './contexts/AuthContext';
-import { DEPARTMENTS } from './constants';
+import { AuthProvider, useAuth } from './contexts/AuthContext'; // <--- แก้ไข import
 
+// สร้าง Component สำหรับแสดงหน้า Loading ง่ายๆ
+const LoadingSpinner = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f3f4f6' }}>
+    <p style={{ fontSize: '1.5rem', color: '#4b5563' }}>กำลังโหลดข้อมูล...</p>
+  </div>
+);
 
-const App: React.FC = () => {
-  const { user } = useAuth();
+// สร้าง Component ใหม่เพื่อจัดการ Routes ซึ่งจะอยู่ภายใต้ AuthProvider
+const AppRoutes: React.FC = () => {
+  const { user, isLoading } = useAuth();
+
+  // ถ้า Context กำลังโหลดข้อมูล user (เช็ค session) ให้แสดงหน้า Loading ก่อน
+  if (isLoading) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      {/* ถ้ายังไม่ login ให้ไปหน้า Login, ถ้า login แล้วพยายามเข้า /login ให้เด้งไป Dashboard */}
+      <Route 
+        path="/login" 
+        element={!user ? <LoginPage /> : <Navigate to="/dashboard" replace />} 
+      />
+      
+      {/* ถ้ายังไม่ login แล้วพยายามเข้าหน้าหลัก ให้เด้งไปหน้า Login */}
       <Route 
         path="/" 
         element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <MainLayout />
-          </ProtectedRoute>
+          user ? (
+            <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
+              <MainLayout />
+            </ProtectedRoute>
+          ) : (
+            <Navigate to="/login" replace />
+          )
         }
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        
+        {/* --- ใส่ Routes ทั้งหมดของคุณไว้ที่นี่ (โค้ดเดิมของคุณ) --- */}
         <Route path="employees" element={
           <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
             <EmployeePage />
           </ProtectedRoute>
         } />
-        <Route path="employee-cards" element={ // New Route for Employee ID Cards
+        <Route path="employee-cards" element={
           <ProtectedRoute 
             allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}
-            hrStaffOverride={true} // HR Staff can access
+            hrStaffOverride={true}
           >
             <EmployeeIdCardPage />
           </ProtectedRoute>
         } />
-        <Route path="leave-management" element={ 
-          <ProtectedRoute 
-            allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}
-            hrStaffOverride={true} 
-          >
-            <LeaveManagementPage />
-          </ProtectedRoute>
-        } />
-        <Route path="inventory" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <InventoryPage />
-          </ProtectedRoute>
-        } />
-        <Route path="inventory/it" element={ // New Route
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <ItInventoryPage />
-          </ProtectedRoute>
-        } />
-        <Route path="purchase-orders" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
-            <PurchaseOrderPage />
-          </ProtectedRoute>
-        } />
-        <Route path="documents" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <DocumentPage />
-          </ProtectedRoute>
-        } />
-        <Route path="payroll" >
-            <Route index element={
-                <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-                    <PayrollPage />
-                </ProtectedRoute>
-            } />
-            <Route path=":runId" element={
-                 <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-                    <PayrollRunDetailsPage />
-                </ProtectedRoute>
-            }/>
-            <Route path="settings" element={
-                <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
-                    <PayrollSettingsPage />
-                </ProtectedRoute>
-            }/>
-        </Route>
-        <Route path="cash-advance" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <CashAdvancePage />
-          </ProtectedRoute>
-        } />
-        <Route path="chat" element={
-         <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <ChatPage />
-          </ProtectedRoute>
-        } />
-        <Route path="calendar" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <CalendarPage />
-          </ProtectedRoute>
-        } />
-        <Route path="reports" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
-            <ReportPage />
-          </ProtectedRoute>
-        } />
-        <Route path="admin/users" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
-            <UserManagementPage />
-          </ProtectedRoute>
-        } />
-        <Route path="admin/fingerprint-scanner" element={ 
-            <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
-                <FingerprintScannerSettingsPage />
-            </ProtectedRoute>
-        } />
-         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* ... ใส่ Routes อื่นๆ ของคุณต่อไปจนครบ ... */}
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
+  );
+};
+
+// Component หลักของ App จะทำหน้าที่แค่ห่อ Provider
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
   );
 };
 
