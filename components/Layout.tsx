@@ -273,22 +273,19 @@ const MarqueeBanner: React.FC<{ text: string | null }> = ({ text }) => {
 // ... (ส่วนอื่นๆ ของไฟล์) ...
 
 export const MainLayout: React.FC = () => {
-    // ...
-
     return (
-        <div className="flex h-screen bg-gray-100">
-            {/* ... */}
-            <div className="flex-1 flex flex-col">
-                {/* ... */}
-                <main className="flex-1 p-6 overflow-y-auto">
-                    {/* วางตรงนี้! */}
-                    <Outlet />
-                </main>
-            </div>
+        // ...
+        <div className="flex-1 flex flex-col">
+            <header>Header Test</header>
+            <main className="flex-1 p-6 bg-gray-100 overflow-y-auto">
+                <h2>--- Main Area Start ---</h2>
+                <Outlet />
+                <h2>--- Main Area End ---</h2>
+            </main>
         </div>
+        // ...
     );
 };
-
 interface ProtectedRouteProps {
   children: JSX.Element;
   allowedRoles: UserRole[];
