@@ -79,11 +79,9 @@ export interface InventoryItem {
   sku: string;
   category: string;
   quantity: number;
-  minStockLevel: number;
   unitPrice: number;
   supplier?: string;
   lastUpdated: string;
-  isLowStock?: boolean; // Added for UI indication
 }
 
 export interface StockTransaction {
@@ -630,7 +628,6 @@ export interface Database {
           created_at: string
           id: string
           last_updated: string
-          min_stock_level: number
           name: string
           quantity: number
           sku: string
@@ -641,7 +638,6 @@ export interface Database {
           category: string
           created_at?: string
           id?: string
-          min_stock_level: number
           name: string
           quantity: number
           sku: string
@@ -652,7 +648,6 @@ export interface Database {
           category?: string
           created_at?: string
           id?: string
-          min_stock_level?: number
           name?: string
           quantity?: number
           sku?: string
