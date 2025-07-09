@@ -1,11 +1,14 @@
+// src/contexts/AuthContext.tsx
+
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { User, UserRole } from '../types';
 import { Session } from '@supabase/supabase-js';
 
+// Interface ไม่ต้องแก้
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password_DUMMY: string) => Promise<{ success: boolean; error: string | null }>;
+  login: (email: string, password_DUMMY: string) => Promise<{ success: boolean; error: string | null }>;
   logout: () => void;
   isLoading: boolean;
   updateUserContext: (updatedUser: User) => void;
@@ -18,36 +21,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAndSetUserProfile = useCallback(async (session: Session | null) => {
+    // --- START: แก้ไขส่วนนี้ ---
     if (session?.user) {
         const authUser = session.user;
         
-        // **Query the profiles table for the latest user data.**
-        // This ensures that any changes made directly in the database (like changing a role)
-        // are immediately reflected in the app upon login or refresh.
+        // แก้ชื่อตารางจาก 'profiles' เป็น 'users'
+        // แก้ชื่อคอลัมน์จาก 'id' เป็น 'user_id'
+        // แก้ select field ให้ตรงกับตาราง users
         const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('full_name, role, department')
-            .eq('id', authUser.id)
+            .from('users') 
+            .select('username, role') 
+            .eq('user_id', authUser.id)
             .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is an error state for a logged in user
+        if (error && error.code !== 'PGRST116') {
             console.error("Error fetching user profile:", error.message);
-            // If we can't fetch the profile, log out the user to prevent inconsistent state
             await supabase.auth.signOut(); 
             setUser(null);
         } else if (profile) {
+            // ดึงข้อมูลจากตาราง users มาใส่ใน state
             setUser({
                 id: authUser.id,
-                username: authUser.email || '',
-                // Use data from the 'profiles' table, with fallbacks.
+                username: profile.username || authUser.email || '',
                 role: profile.role as UserRole || UserRole.STAFF, 
-                name: profile.full_name || authUser.email || 'User',
-                department: profile.department || undefined,
+                // เนื่องจากตาราง users ไม่มี name และ department จึง comment ออกไปก่อน
+                // name: profile.full_name || authUser.email || 'User',
+                // department: profile.department || undefined,
             });
         } else {
-             // This case means a user is authenticated but has no profile. 
-             // This shouldn't happen with the database trigger in place.
-             // We can log them out to be safe.
              console.error(`User ${authUser.id} is authenticated but has no profile. Logging out.`);
              await supabase.auth.signOut();
              setUser(null);
@@ -57,8 +58,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
     }
     setIsLoading(false);
+    // --- END: แก้ไขส่วนนี้ ---
   }, []);
 
+  // ส่วน useEffect ไม่ต้องแก้
   useEffect(() => {
     setIsLoading(true);
     const getSessionAndProfile = async () => {
@@ -69,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getSessionAndProfile();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        setIsLoading(true);
+        // ไม่ต้อง setIsLoading(true) ตรงนี้ เพราะจะทำให้จอกระพริบ
         await fetchAndSetUserProfile(session);
     });
 
@@ -78,53 +81,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [fetchAndSetUserProfile]);
 
+  // --- START: แก้ไขส่วน login ---
+  // แก้ไขฟังก์ชัน login ให้รอการอัปเดต state
   const login = useCallback(async (email: string, password_DUMMY: string) => {
     if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
-    setIsLoading(true);
     
-    // In a real scenario, you'd use a real password.
-    // Here we'll allow login with a dummy password if one is not provided, 
-    // useful for testing with Supabase's magic links or social auth if you add it.
-    const passwordToUse = password_DUMMY || '123456'; // Default password for safety
+    const passwordToUse = password_DUMMY || '123456';
 
     const { error } = await supabase.auth.signInWithPassword({
         email: email,
         password: passwordToUse,
     });
     
-    setIsLoading(false);
-
+    // ไม่ต้อง setIsLoading ที่นี่ onAuthStateChange จะจัดการเอง
+    
     if (error) {
         console.error("Supabase login error:", error.message);
         return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
     }
+    // เราไม่ต้องทำอะไรต่อ onAuthStateChange จะทำงานและอัปเดต state ให้เอง
+    // การคืนค่า success ที่นี่เป็นเพียงการบอก LoginPage ว่าไม่มี error
     return { success: true, error: null };
   }, []);
+  // --- END: แก้ไขส่วน login ---
+
 
   const logout = useCallback(async () => {
     if (!supabase) return;
-    setIsLoading(true);
     await supabase.auth.signOut();
-    setUser(null);
-    setIsLoading(false);
+    // ไม่ต้อง setUser และ setIsLoading ที่นี่ onAuthStateChange จัดการให้แล้ว
   }, []);
   
+  // ส่วน updateUserContext ไม่ต้องแก้
   const updateUserContext = useCallback(async (updatedUserData: User) => {
      if (user && user.id === updatedUserData.id) {
-        // Just update local state for immediate feedback
         setUser(updatedUserData);
-        // A more robust solution might refetch the profile from DB
-        // await fetchAndSetUserProfile(await supabase.auth.getSession().data.session);
     }
   }, [user]);
 
+  // --- START: แก้ไข return ---
+  // เอา !isLoading ออก เพื่อให้ App.tsx เป็นคนจัดการ
   return (
     <AuthContext.Provider value={{ user, login, logout, isLoading, updateUserContext }}>
       {children}
     </AuthContext.Provider>
   );
+  // --- END: แก้ไข return ---
 };
 
+// ส่วน useAuth ไม่ต้องแก้
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
