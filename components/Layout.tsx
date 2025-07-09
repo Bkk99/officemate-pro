@@ -286,11 +286,6 @@ export const MainLayout: React.FC = () => {
         // ...
     );
 };
-// ในไฟล์ src/components/Layout.tsx
-
-// ... import ด้านบน ...
-
-// ⭐️⭐️⭐️ วางโค้ดใหม่นี้แทนที่ ProtectedRoute เดิมทั้งหมด ⭐️⭐️⭐️
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -306,41 +301,29 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
-  // 1. ถ้ากำลังโหลดข้อมูล session, ให้แสดงหน้า Loading
-  // (อันนี้เราจัดการที่ App.tsx ไปแล้ว แต่ใส่ไว้เผื่อก็ได้ ไม่เสียหาย)
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center">กำลังตรวจสอบสิทธิ์...</div>;
   }
 
-  // 2. ถ้าไม่มี user (ยังไม่ล็อกอิน), ให้ไปหน้า login
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 3. ตรวจสอบสิทธิ์การเข้าถึง (Access Check)
-  // เริ่มต้นให้ถือว่ายังไม่มีสิทธิ์
   let hasAccess = false;
 
-  // 3.1 เช็คจาก Role หลักที่อนุญาต
   if (allowedRoles.includes(user.role)) {
     hasAccess = true;
   }
 
-  // 3.2 ถ้ายังไม่มีสิทธิ์, ให้เช็คเงื่อนไขพิเศษ (HR Override)
-  // หมายเหตุ: ต้องมั่นใจว่า user object มี department ด้วย
   if (!hasAccess && hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) {
     hasAccess = true;
   }
   
-  // 4. ตัดสินใจว่าจะ Render อะไร
   if (hasAccess) {
-    // ถ้ามีสิทธิ์, ให้แสดง Component ลูก (หน้าเว็บที่ต้องการ)
     return children;
   } else {
-    // ถ้าไม่มีสิทธิ์, ให้ไปหน้า "ไม่ได้รับอนุญาต" หรือกลับไปหน้า Dashboard หลัก
-    // การ Navigate ไป /unauthorized จะดีกว่าเพื่อป้องกัน Loop
+
     console.warn(`Access Denied: User with role '${user.role}' tried to access a route for '${allowedRoles.join(', ')}'`);
     return <Navigate to="/unauthorized" replace />; 
-    // หรือถ้าไม่มีหน้า unauthorized ก็ใช้ <Navigate to="/dashboard" replace />;
   }
 };
