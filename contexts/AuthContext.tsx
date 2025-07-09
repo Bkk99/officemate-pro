@@ -16,28 +16,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+useEffect(() => {
     const updateUserState = async (session: Session | null) => {
       try {
         if (session?.user) {
-          const { data: profile, error } = await supabase.from('users').select('role').eq('user_id', session.user.id).single();
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single();
+
+          // ถ้ามี Error จาก Supabase (เช่น RLS บล็อก) ให้โยน Error ออกไป
           if (error) throw error;
-          setUser({ id: session.user.id, email: session.user.email || '', role: profile?.role || 'staff' });
+
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: profile?.role || 'staff'
+          });
         } else {
           setUser(null);
         }
       } catch (error) {
-        console.error("AuthContext Error:", error);
-        setUser(null);
+        // ดักจับ Error แล้วแสดงใน Console
+        console.error("AuthContext: Error fetching user data:", error);
+        setUser(null); // เคลียร์ user ถ้าเกิดปัญหา
       } finally {
+        // บล็อกนี้จะทำงาน "เสมอ"
         setIsLoading(false);
       }
     };
-    supabase.auth.getSession().then(({ data: { session } }) => updateUserState(session));
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => updateUserState(session));
-    return () => { authListener.subscription.unsubscribe(); };
-  }, []);
 
+    // เรียกครั้งแรกเพื่อเช็ค session ที่อาจมีอยู่
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        updateUserState(session);
+    });
+    
+    // ดักฟังการเปลี่ยนแปลง
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        updateUserState(session);
+    });
+
+    return () => { authListener.subscription.unsubscribe(); };
+}, []);
+  
   const login = useCallback(async (email: string, password_DUMMY: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password: password_DUMMY });
