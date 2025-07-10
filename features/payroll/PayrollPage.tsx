@@ -155,21 +155,35 @@ export const PayrollPage: React.FC = () => {
   };
 
   const handleExportRuns = () => {
+    const headerMapping = {
+        id: 'ID',
+        periodMonth: 'รอบเดือน',
+        periodYear: 'ปี',
+        status: 'สถานะ',
+        dateCreated: 'วันที่สร้าง',
+        dateApproved: 'วันที่อนุมัติ',
+        datePaid: 'วันที่จ่าย',
+        totalEmployees: 'จำนวนพนักงาน',
+        totalGrossPay: 'ยอดรวมเงินได้',
+        totalDeductions: 'ยอดรวมหัก',
+        totalNetPay: 'ยอดสุทธิ',
+        notes: 'หมายเหตุ',
+    };
     const dataToExport = payrollRuns.map(run => ({
-        'ID': run.id,
-        'รอบเดือน': MONTH_OPTIONS.find(m => m.value === run.periodMonth)?.label,
-        'ปี': run.periodYear + 543,
-        'สถานะ': PAYROLL_RUN_STATUSES_TH[run.status],
-        'วันที่สร้าง': new Date(run.dateCreated).toLocaleDateString('th-TH'),
-        'วันที่อนุมัติ': run.dateApproved ? new Date(run.dateApproved).toLocaleDateString('th-TH') : '',
-        'วันที่จ่าย': run.datePaid ? new Date(run.datePaid).toLocaleDateString('th-TH') : '',
-        'จำนวนพนักงาน': run.totalEmployees,
-        'ยอดรวมเงินได้': run.totalGrossPay.toFixed(2),
-        'ยอดรวมหัก': run.totalDeductions.toFixed(2),
-        'ยอดสุทธิ': run.totalNetPay.toFixed(2),
-        'หมายเหตุ': run.notes || '',
+        id: run.id,
+        periodMonth: MONTH_OPTIONS.find(m => m.value === run.periodMonth)?.label,
+        periodYear: run.periodYear + 543,
+        status: PAYROLL_RUN_STATUSES_TH[run.status],
+        dateCreated: new Date(run.dateCreated).toLocaleDateString('th-TH'),
+        dateApproved: run.dateApproved ? new Date(run.dateApproved).toLocaleDateString('th-TH') : '',
+        datePaid: run.datePaid ? new Date(run.datePaid).toLocaleDateString('th-TH') : '',
+        totalEmployees: run.totalEmployees,
+        totalGrossPay: run.totalGrossPay.toFixed(2),
+        totalDeductions: run.totalDeductions.toFixed(2),
+        totalNetPay: run.totalNetPay.toFixed(2),
+        notes: run.notes || '',
     }));
-    exportToCsv('payroll_runs_data', dataToExport);
+    exportToCsv('payroll_runs_data', dataToExport, headerMapping);
   };
   
   const handleViewMyPayslip = async (payslip: Payslip) => {

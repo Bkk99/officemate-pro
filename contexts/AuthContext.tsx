@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { User, UserRole } from '../types';
-import { Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -24,7 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // **Query the profiles table for the latest user data.**
         // This ensures that any changes made directly in the database (like changing a role)
         // are immediately reflected in the app upon login or refresh.
-        const { data: profile, error } = await supabase
+        const { data: profile, error } = await supabase!
             .from('profiles')
             .select('full_name, role, department')
             .eq('id', authUser.id)
@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is an error state for a logged in user
             console.error("Error fetching user profile:", error.message);
             // If we can't fetch the profile, log out the user to prevent inconsistent state
-            await supabase.auth.signOut(); 
+            if (supabase) await supabase.auth.signOut(); 
             setUser(null);
         } else if (profile) {
             setUser({
@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
              // This shouldn't happen with the database trigger in place.
              // We can log them out to be safe.
              console.error(`User ${authUser.id} is authenticated but has no profile. Logging out.`);
-             await supabase.auth.signOut();
+             if (supabase) await supabase.auth.signOut();
              setUser(null);
         }
 
@@ -62,13 +62,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     setIsLoading(true);
     const getSessionAndProfile = async () => {
+        if (!supabase) {
+          setIsLoading(false);
+          return;
+        }
         const { data: { session } } = await supabase.auth.getSession();
         await fetchAndSetUserProfile(session);
     };
 
     getSessionAndProfile();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    if (!supabase) return;
+    
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
         setIsLoading(true);
         await fetchAndSetUserProfile(session);
     });
@@ -78,18 +84,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [fetchAndSetUserProfile]);
 
-  const login = useCallback(async (email: string, password_DUMMY: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
     setIsLoading(true);
     
-    // In a real scenario, you'd use a real password.
-    // Here we'll allow login with a dummy password if one is not provided, 
-    // useful for testing with Supabase's magic links or social auth if you add it.
-    const passwordToUse = password_DUMMY || '123456'; // Default password for safety
-
+    // Use the password from the form directly.
     const { error } = await supabase.auth.signInWithPassword({
         email: email,
-        password: passwordToUse,
+        password: password,
     });
     
     setIsLoading(false);

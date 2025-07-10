@@ -41,6 +41,15 @@ const initialPOState: Omit<PurchaseOrder, 'id' | 'totalAmount' | 'poNumber'> = {
   supplier: '', items: [], status: 'Pending', orderDate: new Date().toISOString().split('T')[0],
 };
 
+const PO_STATUSES_COLORS: Record<PurchaseOrder['status'], string> = {
+    Pending: 'bg-yellow-100 text-yellow-800',
+    Approved: 'bg-blue-100 text-blue-800',
+    Processing: 'bg-indigo-100 text-indigo-800',
+    Shipped: 'bg-purple-100 text-purple-800',
+    Completed: 'bg-green-100 text-green-800',
+    Cancelled: 'bg-red-100 text-red-800',
+};
+
 export const PurchaseOrderPage: React.FC = () => {
   const { user } = useAuth();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -160,23 +169,37 @@ export const PurchaseOrderPage: React.FC = () => {
   };
 
   const handleExportPOs = () => {
+    const headerMapping = {
+        poNumber: 'เลขที่ PO',
+        supplier: 'ซัพพลายเออร์',
+        orderDate: 'วันที่สั่งซื้อ',
+        expectedDeliveryDate: 'วันที่คาดว่าจะได้รับ',
+        itemId: 'รหัสสินค้า',
+        itemName: 'ชื่อสินค้า',
+        quantity: 'จำนวน',
+        unitPrice: 'ราคาต่อหน่วย',
+        itemTotal: 'ยอดรวมรายการ',
+        totalAmount: 'ยอดรวม PO',
+        status: 'สถานะ',
+        notes: 'หมายเหตุ',
+    };
     const dataToExport = purchaseOrders.flatMap(po => 
         po.items.map(item => ({
-            'เลขที่ PO': po.poNumber,
-            'ซัพพลายเออร์': po.supplier,
-            'วันที่สั่งซื้อ': new Date(po.orderDate).toLocaleDateString('th-TH'),
-            'วันที่คาดว่าจะได้รับ': po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('th-TH') : '',
-            'รหัสสินค้า': item.itemId,
-            'ชื่อสินค้า': item.itemName,
-            'จำนวน': item.quantity,
-            'ราคาต่อหน่วย': item.unitPrice,
-            'ยอดรวมรายการ': item.quantity * item.unitPrice,
-            'ยอดรวม PO': po.totalAmount,
-            'สถานะ': PO_STATUSES_TH[po.status as keyof typeof PO_STATUSES_TH] || po.status,
-            'หมายเหตุ': po.notes || '',
+            poNumber: po.poNumber,
+            supplier: po.supplier,
+            orderDate: new Date(po.orderDate).toLocaleDateString('th-TH'),
+            expectedDeliveryDate: po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('th-TH') : '',
+            itemId: item.itemId,
+            itemName: item.itemName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            itemTotal: item.quantity * item.unitPrice,
+            totalAmount: po.totalAmount,
+            status: PO_STATUSES_TH[po.status as keyof typeof PO_STATUSES_TH] || po.status,
+            notes: po.notes || '',
         }))
     );
-    exportToCsv('purchase_orders_data', dataToExport);
+    exportToCsv('purchase_orders_data', dataToExport, headerMapping);
   };
 
   const poColumns = [
@@ -195,15 +218,6 @@ export const PurchaseOrderPage: React.FC = () => {
     )},
   ];
   
-  const PO_STATUSES_COLORS: Record<PurchaseOrder['status'], string> = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Approved: 'bg-blue-100 text-blue-800',
-    Processing: 'bg-indigo-100 text-indigo-800',
-    Shipped: 'bg-purple-100 text-purple-800',
-    Completed: 'bg-green-100 text-green-800',
-    Cancelled: 'bg-red-100 text-red-800',
-  };
-
   if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   return (

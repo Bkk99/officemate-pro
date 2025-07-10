@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { InventoryItem, StockTransaction, UserRole } from '../../types';
@@ -48,8 +49,8 @@ const ArrowDownTrayIconExport = (props: React.SVGProps<SVGSVGElement>) => ( // R
 );
 
 
-const initialItemState: Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'> = {
-  name: '', sku: '', category: '', quantity: 0, minStockLevel: 10, unitPrice: 0, supplier: ''
+const initialItemState: Omit<InventoryItem, 'id' | 'lastUpdated'> = {
+  name: '', sku: '', category: '', quantity: 0, unitPrice: 0, supplier: ''
 };
 
 export const InventoryPage: React.FC = () => {
@@ -63,7 +64,7 @@ export const InventoryPage: React.FC = () => {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [itemHistory, setItemHistory] = useState<StockTransaction[]>([]);
 
-  const [currentItem, setCurrentItem] = useState<Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'> | InventoryItem>(initialItemState);
+  const [currentItem, setCurrentItem] = useState<Omit<InventoryItem, 'id' | 'lastUpdated'> | InventoryItem>(initialItemState);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   
   const [stockTransaction, setStockTransaction] = useState<{itemId: string; itemName: string; type: 'IN' | 'OUT'; quantity: number; reason: string}>({ itemId: '', itemName: '', type: 'IN', quantity: 1, reason: STOCK_TRANSACTION_REASONS[0] });
@@ -144,7 +145,7 @@ export const InventoryPage: React.FC = () => {
 
   const handleItemChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    const numValue = (name === 'quantity' || name === 'minStockLevel' || name === 'unitPrice') ? parseFloat(value) : value;
+    const numValue = (name === 'quantity' || name === 'unitPrice') ? parseFloat(value) : value;
     setCurrentItem(prev => ({ ...prev, [name]: numValue }));
   };
 
@@ -154,7 +155,7 @@ export const InventoryPage: React.FC = () => {
         if (editingItemId) {
             await updateInventoryItem(currentItem as InventoryItem);
         } else {
-            await addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated' | 'isLowStock'>);
+            await addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>);
         }
         await fetchInventory();
         handleCloseItemModal();
@@ -224,30 +225,39 @@ export const InventoryPage: React.FC = () => {
 
   const handleExportInventory = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
+    
+    const headerMapping = {
+        sku: 'รหัสสินค้า (SKU)',
+        name: 'ชื่อสินค้า',
+        category: 'หมวดหมู่',
+        quantity: 'จำนวนคงเหลือ',
+        unitPrice: 'ราคาต่อหน่วย',
+        supplier: 'ซัพพลายเออร์',
+        lastUpdated: 'อัปเดตล่าสุด',
+    };
+
     const dataToExport = inventory.map(item => ({
-        'รหัสสินค้า (SKU)': item.sku,
-        'ชื่อสินค้า': item.name,
-        'หมวดหมู่': item.category,
-        'จำนวนคงเหลือ': item.quantity,
-        'สต็อกขั้นต่ำ': item.minStockLevel,
-        'ราคาต่อหน่วย': item.unitPrice,
-        'ซัพพลายเออร์': item.supplier || '',
-        'อัปเดตล่าสุด': new Date(item.lastUpdated).toLocaleString('th-TH'),
-        'สถานะสต็อกต่ำ': item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
+        sku: item.sku,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        supplier: item.supplier || '',
+        lastUpdated: new Date(item.lastUpdated).toLocaleString('th-TH'),
     }));
-    exportToCsv('general_inventory_data', dataToExport);
+    exportToCsv('general_inventory_data', dataToExport, headerMapping);
   };
   
   const handleExportTransactions = () => {
     const dataToExport = allTransactions
       .filter(t => (activeTab === 'in' ? t.type === 'IN' : t.type === 'OUT'))
       .map(t => ({
-        'วันที่': new Date(t.date).toLocaleString('th-TH'),
-        'ชื่อสินค้า': t.itemName,
-        'ประเภท': STOCK_TRANSACTION_TYPES_TH[t.type],
-        'จำนวน': t.quantity,
-        'เหตุผล': t.reason,
-        'ดำเนินการโดย': t.employeeName || '',
+        date: new Date(t.date).toLocaleString('th-TH'),
+        itemName: t.itemName,
+        type: STOCK_TRANSACTION_TYPES_TH[t.type],
+        quantity: t.quantity,
+        reason: t.reason,
+        employeeName: t.employeeName || '',
       }));
     
     if (dataToExport.length === 0) {
@@ -255,23 +265,25 @@ export const InventoryPage: React.FC = () => {
         return;
     }
 
+    const headerMapping = {
+        date: 'วันที่',
+        itemName: 'ชื่อสินค้า',
+        type: 'ประเภท',
+        quantity: 'จำนวน',
+        reason: 'เหตุผล',
+        employeeName: 'ดำเนินการโดย',
+    };
+
     const filename = `general_stock_transactions_${activeTab}_${new Date().toISOString().split('T')[0]}`;
-    exportToCsv(filename, dataToExport);
+    exportToCsv(filename, dataToExport, headerMapping);
   };
 
 
   const inventoryColumns: TableColumn<InventoryItem>[] = [
     { header: 'รหัสสินค้า (SKU)', accessor: 'sku' },
-    { header: 'ชื่อสินค้า', accessor: (item: InventoryItem) => (
-        <div className='flex items-center'>
-          {item.name}
-          {item.isLowStock && <span className="ml-2 px-2 py-0.5 text-xs font-semibold text-red-800 bg-red-100 rounded-full">สินค้าเหลือน้อย</span>}
-        </div>
-      )
-    },
+    { header: 'ชื่อสินค้า', accessor: 'name' },
     { header: 'หมวดหมู่', accessor: 'category' },
     { header: 'จำนวน', accessor: 'quantity', className: 'text-right' },
-    { header: 'สต็อกขั้นต่ำ', accessor: 'minStockLevel', className: 'text-right' },
     { header: 'ราคาต่อหน่วย', accessor: (item: InventoryItem) => `฿${item.unitPrice.toFixed(2)}`, className: 'text-right' },
     { header: 'อัปเดตล่าสุด', accessor: (item: InventoryItem) => new Date(item.lastUpdated).toLocaleDateString('th-TH') },
     { header: 'การดำเนินการ', accessor: (item: InventoryItem) => (
@@ -415,7 +427,6 @@ export const InventoryPage: React.FC = () => {
               <Input label="หมวดหมู่" name="category" value={currentItem.category} onChange={handleItemChange} />
               <Input label="ซัพพลายเออร์" name="supplier" value={currentItem.supplier || ''} onChange={handleItemChange} />
               <Input label="จำนวนคงเหลือ" name="quantity" type="number" value={currentItem.quantity} onChange={handleItemChange} min="0" required />
-              <Input label="ระดับสต็อกขั้นต่ำ" name="minStockLevel" type="number" value={currentItem.minStockLevel} onChange={handleItemChange} min="0" required />
               <Input label="ราคาต่อหน่วย (บาท)" name="unitPrice" type="number" value={currentItem.unitPrice} onChange={handleItemChange} step="0.01" min="0" required />
           </div>
           <div className="mt-6 flex justify-end space-x-2">

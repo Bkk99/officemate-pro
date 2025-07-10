@@ -17,6 +17,7 @@ const urlsToCache = [
   '/components/ui/Select.tsx',
   '/components/ui/Spinner.tsx',
   '/components/ui/Table.tsx',
+  '/components/ui/ImportCsvModal.tsx',
   '/contexts/AuthContext.tsx',
   '/features/auth/LoginPage.tsx',
   '/features/dashboard/DashboardPage.tsx',
@@ -40,8 +41,9 @@ const urlsToCache = [
   '/features/payroll/PayrollSettingsPage.tsx',
   '/features/payroll/EditPayslipModal.tsx',
   '/features/payroll/PayslipView.tsx',
+  '/features/payroll/payrollCalculations.ts',
   '/features/documents/DocumentView.tsx',
-  '/services/mockData.ts',
+  '/services/api.ts',
   '/services/notificationService.ts',
   '/utils/export.ts',
   // External assets

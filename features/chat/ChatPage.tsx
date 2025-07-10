@@ -165,7 +165,7 @@ export const ChatPage: React.FC = () => {
             const currentHistory = messages[roomId] || [];
             const geminiHistory = mapMessagesToGeminiHistory(currentHistory);
             const chat = ai.chats.create({
-                model: 'gemini-2.5-flash-preview-04-17',
+                model: 'gemini-2.5-flash',
                 history: geminiHistory,
                 config: {
                     systemInstruction: "You are a helpful office assistant for a company called 'Officemate Pro'. Be friendly, concise, and professional. Answer questions related to general office tasks, productivity, and professional communication in Thai or English as the user prefers."
