@@ -1,17 +1,18 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PayrollRun, PayrollRunStatus, Payslip, UserRole, Employee } from '../../types';
 import { 
-  MOCK_PAYROLL_RUNS, 
+  getPayrollRuns,
   addPayrollRun, 
   deletePayrollRun, 
-  MOCK_EMPLOYEES, 
-  generatePayslipForEmployee, 
-  addPayslip, 
+  getEmployees,
+  getPayslipsForEmployee,
+  getEmployeeById,
+  addPayslip,
   updatePayrollRun,
-  getPayslipsForEmployee, // New import
-  getEmployeeById,        // New import
-} from '../../services/mockData';
+} from '../../services/api';
+import { generatePayslipForEmployee } from './payrollCalculations';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -21,8 +22,8 @@ import { Textarea } from '../../components/ui/Input';
 import { MONTH_OPTIONS, YEAR_OPTIONS, PAYROLL_RUN_STATUSES_TH, PAYROLL_RUN_STATUS_OPTIONS, PAYROLL_RUN_STATUS_COLORS, APP_NAME, COMPANY_ADDRESS_MOCK, COMPANY_LOGO_URL_MOCK } from '../../constants';
 import { Spinner } from '../../components/ui/Spinner';
 import { exportToCsv } from '../../utils/export';
-import { useAuth } from '../../contexts/AuthContext'; // New import
-import { PayslipView } from './PayslipView'; // New import for modal display
+import { useAuth } from '../../contexts/AuthContext';
+import { PayslipView } from './PayslipView';
 
 const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -74,18 +75,19 @@ export const PayrollPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     if (!user) return;
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    if (user.role === UserRole.STAFF) {
-      const staffEmployeeRecord = MOCK_EMPLOYEES.find(emp => emp.id === user.id || (emp.name === user.name && emp.department === user.department)); // Try to match Staff user to Employee record
-      if (staffEmployeeRecord) {
-        setMyPayslips(getPayslipsForEmployee(staffEmployeeRecord.id));
-      } else {
-        setMyPayslips([]); // No matching employee record for this staff user
-      }
-    } else {
-      setPayrollRuns(MOCK_PAYROLL_RUNS.sort((a,b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()));
+    try {
+        if (user.role === UserRole.STAFF) {
+            const staffPayslips = await getPayslipsForEmployee(user.id);
+            setMyPayslips(staffPayslips);
+        } else {
+            const runs = await getPayrollRuns();
+            setPayrollRuns(runs);
+        }
+    } catch (error) {
+        console.error("Failed to fetch payroll data:", error);
+    } finally {
+        setIsLoading(false);
     }
-    setIsLoading(false);
   }, [user]);
 
   useEffect(() => {
@@ -98,28 +100,36 @@ export const PayrollPage: React.FC = () => {
   };
 
   const handleCreateRunSubmit = async () => {
-    const existingRun = MOCK_PAYROLL_RUNS.find(r => r.periodMonth === newRunData.periodMonth && r.periodYear === newRunData.periodYear);
+    const existingRun = payrollRuns.find(r => r.periodMonth === newRunData.periodMonth && r.periodYear === newRunData.periodYear);
     if (existingRun) {
         alert(`รอบการจ่ายเงินเดือนสำหรับ ${MONTH_OPTIONS.find(m=>m.value === newRunData.periodMonth)?.label} ${newRunData.periodYear + 543} มีอยู่แล้ว`);
         return;
     }
     
-    const createdRunMeta = addPayrollRun(newRunData);
+    const createdRunMeta = await addPayrollRun({
+        ...newRunData,
+        dateCreated: new Date().toISOString(),
+        payslipIds: [],
+        totalEmployees: 0,
+        totalGrossPay: 0,
+        totalDeductions: 0,
+        totalNetPay: 0,
+    });
     
-    const activeEmployees = MOCK_EMPLOYEES.filter(emp => emp.status === 'Active' && emp.baseSalary && emp.baseSalary > 0);
+    const activeEmployees = (await getEmployees()).filter(emp => emp.status === 'Active' && emp.baseSalary && emp.baseSalary > 0);
     let totalGross = 0;
     let totalDeductionsRun = 0;
     let totalNet = 0;
     const payslipIdsForRun: string[] = [];
 
-    activeEmployees.forEach(emp => {
-        const payslip = generatePayslipForEmployee(emp, createdRunMeta.periodMonth, createdRunMeta.periodYear, createdRunMeta.id);
-        addPayslip(payslip);
+    for (const emp of activeEmployees) {
+        const payslip = await generatePayslipForEmployee(emp, createdRunMeta.periodMonth, createdRunMeta.periodYear, createdRunMeta.id);
+        await addPayslip(payslip);
         payslipIdsForRun.push(payslip.id);
         totalGross += payslip.grossPay;
         totalDeductionsRun += payslip.totalDeductions;
         totalNet += payslip.netPay;
-    });
+    }
     
     const finalRunData: PayrollRun = {
         ...createdRunMeta,
@@ -129,7 +139,7 @@ export const PayrollPage: React.FC = () => {
         totalDeductions: totalDeductionsRun,
         totalNetPay: totalNet,
     };
-    updatePayrollRun(finalRunData);
+    await updatePayrollRun(finalRunData);
 
     await fetchData();
     setIsCreateRunModalOpen(false);
@@ -139,7 +149,7 @@ export const PayrollPage: React.FC = () => {
 
   const handleDeleteRun = async (id: string) => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรอบการจ่ายเงินเดือนนี้และสลิปเงินเดือนที่เกี่ยวข้องทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
-      deletePayrollRun(id);
+      await deletePayrollRun(id);
       await fetchData();
     }
   };
@@ -162,8 +172,8 @@ export const PayrollPage: React.FC = () => {
     exportToCsv('payroll_runs_data', dataToExport);
   };
   
-  const handleViewMyPayslip = (payslip: Payslip) => {
-    const employeeDetails = getEmployeeById(payslip.employeeId);
+  const handleViewMyPayslip = async (payslip: Payslip) => {
+    const employeeDetails = await getEmployeeById(payslip.employeeId);
     setSelectedPayslipForView(payslip);
     setSelectedEmployeeForView(employeeDetails || null);
     setIsPayslipViewModalOpen(true);
@@ -237,11 +247,11 @@ export const PayrollPage: React.FC = () => {
         <Modal isOpen={isPayslipViewModalOpen} onClose={() => setIsPayslipViewModalOpen(false)} title={`สลิปเงินเดือน - ${selectedPayslipForView.employeeName}`} size="xl">
           <PayslipView 
             payslip={selectedPayslipForView} 
-            employee={selectedEmployeeForView || undefined} // selectedEmployeeForView might be null if staff user direct match
+            employee={selectedEmployeeForView || undefined}
             companyName={APP_NAME}
             companyAddress={COMPANY_ADDRESS_MOCK}
             companyLogoUrl={COMPANY_LOGO_URL_MOCK} 
-            isPaid={selectedPayslipForView.paymentDate ? true : false} // Determine if paid based on payslip's paymentDate
+            isPaid={selectedPayslipForView.paymentDate ? true : false}
           />
           <div className="mt-6 flex justify-end space-x-2">
             <Button variant="secondary" onClick={() => setIsPayslipViewModalOpen(false)}>ปิด</Button>

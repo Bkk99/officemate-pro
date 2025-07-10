@@ -37,7 +37,7 @@ const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 const ArrowUpTrayIcon = (props: React.SVGProps<SVGSVGElement>) => ( 
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-    <path d="M10.75 17.25a.75.75 0 001.5 0V8.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25-4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z" />
+    <path d="M10.75 17.25a.75.75 0 001.5 0V8.636l2.955 3.129a.75.75 0 001.09-1.03l-4.25-4.5a.75.75 0 00-1.09 0l-4.25 4.5a.75.75 0 101.09 1.03l2.955-3.129v8.614z" />
     <path d="M3.5 7.25a.75.75 0 00-1.5 0v-2.5A2.75 2.75 0 014.75 2h10.5A2.75 2.75 0 0118 4.75v2.5a.75.75 0 00-1.5 0v-2.5c0-.69-.56-1.25-1.25-1.25H4.75c-.69 0-1.25-.56-1.25-1.25v2.5z" />
   </svg>
 );
@@ -224,41 +224,30 @@ const ItInventoryPage: React.FC = () => {
 
   const handleExportInventory = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
-    const headerMapping = {
-        sku: 'รหัสสินค้า (SKU)',
-        name: 'ชื่อสินค้า',
-        category: 'หมวดหมู่',
-        quantity: 'จำนวนคงเหลือ',
-        minStockLevel: 'สต็อกขั้นต่ำ',
-        unitPrice: 'ราคาต่อหน่วย',
-        supplier: 'ซัพพลายเออร์',
-        lastUpdated: 'อัปเดตล่าสุด',
-        isLowStock: 'สถานะสต็อกต่ำ',
-    };
     const dataToExport = inventory.map(item => ({
-        sku: item.sku,
-        name: item.name,
-        category: item.category,
-        quantity: item.quantity,
-        minStockLevel: item.minStockLevel,
-        unitPrice: item.unitPrice,
-        supplier: item.supplier || '',
-        lastUpdated: new Date(item.lastUpdated).toLocaleString('th-TH'),
-        isLowStock: item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
+        'รหัสสินค้า (SKU)': item.sku,
+        'ชื่อสินค้า': item.name,
+        'หมวดหมู่': item.category,
+        'จำนวนคงเหลือ': item.quantity,
+        'สต็อกขั้นต่ำ': item.minStockLevel,
+        'ราคาต่อหน่วย': item.unitPrice,
+        'ซัพพลายเออร์': item.supplier || '',
+        'อัปเดตล่าสุด': new Date(item.lastUpdated).toLocaleString('th-TH'),
+        'สถานะสต็อกต่ำ': item.quantity < item.minStockLevel ? 'ใช่' : 'ไม่ใช่',
     }));
-    exportToCsv('it_inventory_data', dataToExport, headerMapping);
+    exportToCsv('it_inventory_data', dataToExport);
   };
 
   const handleExportTransactions = () => {
     const dataToExport = allTransactions
       .filter(t => (activeTab === 'in' ? t.type === 'IN' : t.type === 'OUT'))
       .map(t => ({
-        date: new Date(t.date).toLocaleString('th-TH'),
-        itemName: t.itemName,
-        type: STOCK_TRANSACTION_TYPES_TH[t.type],
-        quantity: t.quantity,
-        reason: t.reason,
-        employeeName: t.employeeName || '',
+        'วันที่': new Date(t.date).toLocaleString('th-TH'),
+        'ชื่อสินค้า': t.itemName,
+        'ประเภท': STOCK_TRANSACTION_TYPES_TH[t.type],
+        'จำนวน': t.quantity,
+        'เหตุผล': t.reason,
+        'ดำเนินการโดย': t.employeeName || '',
       }));
     
     if (dataToExport.length === 0) {
@@ -266,17 +255,8 @@ const ItInventoryPage: React.FC = () => {
         return;
     }
 
-    const headerMapping = {
-        date: 'วันที่',
-        itemName: 'ชื่อสินค้า',
-        type: 'ประเภท',
-        quantity: 'จำนวน',
-        reason: 'เหตุผล',
-        employeeName: 'ดำเนินการโดย',
-    };
-
     const filename = `it_stock_transactions_${activeTab}_${new Date().toISOString().split('T')[0]}`;
-    exportToCsv(filename, dataToExport, headerMapping);
+    exportToCsv(filename, dataToExport);
   };
 
   const inventoryColumns: TableColumn<InventoryItem>[] = [

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Employee, UserRole } from '../../types';
-import { MOCK_EMPLOYEES, getEmployeeById } from '../../services/mockData';
+import { getEmployees, getEmployeeById } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Select } from '../../components/ui/Select';
@@ -46,48 +46,52 @@ export const EmployeeIdCardPage: React.FC = () => {
   const isRegularStaff = user?.role === UserRole.STAFF && !isHRDeptStaff;
   const canSelectEmployee = user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || isHRDeptStaff;
 
-  const fetchEmployees = useCallback(async () => {
+  const fetchEmployeesList = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    let relevantEmployees = MOCK_EMPLOYEES;
-    // For regular staff, we will still load all employees initially, but the selection will be fixed.
-    // This is because HR Staff might fall under UserRole.STAFF but need full access.
-    // The actual filtering for display/selection happens based on `canSelectEmployee`.
-    
-    setEmployees(relevantEmployees.filter(emp => emp.status === 'Active')); 
-    setIsLoading(false);
+    try {
+        const activeEmployees = (await getEmployees()).filter(emp => emp.status === 'Active');
+        setEmployees(activeEmployees);
+    } catch(error) {
+        console.error("Failed to fetch employees for ID card page:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
+    fetchEmployeesList();
+  }, [fetchEmployeesList]);
+  
+  const fetchEmployeeDetails = useCallback(async (id: string) => {
+    if (!id) {
+        setSelectedEmployee(null);
+        return;
+    }
+    try {
+      const employeeDetails = await getEmployeeById(id);
+      setSelectedEmployee(employeeDetails || null);
+    } catch(error) {
+       console.error(`Failed to fetch employee details for ID ${id}:`, error);
+       setSelectedEmployee(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (selectedEmployeeId) {
-      const employeeDetails = getEmployeeById(selectedEmployeeId);
-      setSelectedEmployee(employeeDetails || null);
-    } else {
-      setSelectedEmployee(null);
+        fetchEmployeeDetails(selectedEmployeeId);
     }
-  }, [selectedEmployeeId]);
+  }, [selectedEmployeeId, fetchEmployeeDetails]);
 
   useEffect(() => { 
     if (isRegularStaff && user && employees.length > 0) {
         let staffEmployee = employees.find(emp => emp.id === user.id);
-        if (!staffEmployee) {
-           staffEmployee = employees.find(emp => emp.name === user.name && emp.department === user.department);
-        }
-        if (staffEmployee) {
+        if (staffEmployee && staffEmployee.id !== selectedEmployeeId) {
             setSelectedEmployeeId(staffEmployee.id);
-        } else {
-            setSelectedEmployee(null); // Clear if no match
+        } else if (!staffEmployee) {
+             setSelectedEmployee(null); // Clear if no match
         }
-    } else if (canSelectEmployee && employees.length > 0 && !selectedEmployeeId) {
-        // For privileged users, if no one is selected yet, maybe default to first one or leave empty
-        // setSelectedEmployeeId(employees[0].id); // Optional: select first employee for convenience for admin/HR
     }
-  }, [user, employees, isRegularStaff, canSelectEmployee, selectedEmployeeId]);
+  }, [user, employees, isRegularStaff, selectedEmployeeId]);
 
   const handlePrint = () => {
     const printContents = document.getElementById('employee-id-card-preview')?.outerHTML;
@@ -146,7 +150,7 @@ export const EmployeeIdCardPage: React.FC = () => {
     }
   };
 
-  if (isLoading || (isRegularStaff && !selectedEmployee && employees.length > 0)) { // Add check for regular staff waiting for auto-selection
+  if (isLoading) {
       return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
   }
 

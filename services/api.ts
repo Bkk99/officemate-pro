@@ -1,4 +1,3 @@
-
 // services/api.ts
 import { supabase as supabaseInstance } from '../lib/supabaseClient';
 import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, EmployeeStatusKey, POStatusKey, DocumentStatusKey, DocumentType, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeAllowance, EmployeeDeduction, PayslipItem, ManagedUser, UserRole } from '../types';
@@ -53,13 +52,8 @@ export const getAllUserProfiles = async (): Promise<User[]> => {
 };
 
 // --- Employees ---
-export const getAllEmployees = async (): Promise<Employee[]> => {
-    const { data, error } = await supabase.from('employees').select('*');
-    const rows = handleSupabaseError({ data, error }, 'getAllEmployees') || [];
-    return rows.map(mapEmployeeFromDb);
-};
 export const getEmployees = async (): Promise<Employee[]> => {
-    const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('employees').select('*');
     const rows = handleSupabaseError({ data, error }, 'getEmployees') || [];
     return rows.map(mapEmployeeFromDb);
 };
@@ -96,10 +90,6 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<E
     };
     const { data, error } = await supabase.from('employees').insert(dbData).select().single();
     return mapEmployeeFromDb(handleSupabaseError({ data, error }, 'addEmployee'));
-};
-export const addBulkEmployees = async (employees: Database['public']['Tables']['employees']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('employees').insert(employees);
-    handleSupabaseError({ data: null, error }, 'addBulkEmployees');
 };
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
     const { id, ...employeeData } = updatedEmployee;
@@ -155,15 +145,8 @@ export const addTimeLog = async (logData: Omit<TimeLog, 'id'>): Promise<TimeLog>
 };
 
 // --- Inventory ---
-export const getAllInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
-    let query = supabase.from('inventory_items').select('*');
-    if (category) { (category === 'General') ? query = query.not('category', 'eq', 'อุปกรณ์ IT') : query = query.eq('category', category); }
-    const { data, error } = await query;
-    const rows = handleSupabaseError({ data, error }, 'getAllInventoryItems') || [];
-    return rows.map((r: InventoryItemRow) => ({ id: r.id, name: r.name, sku: r.sku, category: r.category, quantity: r.quantity, minStockLevel: r.min_stock_level, unitPrice: r.unit_price, supplier: r.supplier || undefined, lastUpdated: r.last_updated, isLowStock: r.quantity < r.min_stock_level }));
-};
 export const getInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
-    let query = supabase.from('inventory_items').select('*').order('last_updated', { ascending: false }).limit(100);
+    let query = supabase.from('inventory_items').select('*');
     if (category) { (category === 'General') ? query = query.not('category', 'eq', 'อุปกรณ์ IT') : query = query.eq('category', category); }
     const { data, error } = await query;
     const rows = handleSupabaseError({ data, error }, 'getInventoryItems') || [];
@@ -185,10 +168,6 @@ export const addInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'las
     const r = handleSupabaseError({ data, error }, 'addInventoryItem');
     return { id: r.id, name: r.name, sku: r.sku, category: r.category, quantity: r.quantity, minStockLevel: r.min_stock_level, unitPrice: r.unit_price, supplier: r.supplier || undefined, lastUpdated: r.last_updated, isLowStock: r.quantity < r.min_stock_level };
 };
-export const addBulkInventoryItems = async (items: Database['public']['Tables']['inventory_items']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('inventory_items').insert(items);
-    handleSupabaseError({ data: null, error }, 'addBulkInventoryItems');
-};
 export const updateInventoryItem = async (updatedItem: InventoryItem): Promise<InventoryItem> => {
     const { id, ...itemData } = updatedItem;
     const dbData: Database['public']['Tables']['inventory_items']['Update'] = { name: itemData.name, sku: itemData.sku, category: itemData.category, quantity: itemData.quantity, min_stock_level: itemData.minStockLevel, unit_price: itemData.unitPrice, supplier: itemData.supplier || null };
@@ -205,13 +184,8 @@ export const addStockTransaction = async (transactionData: Omit<StockTransaction
 // --- Purchase Orders ---
 const mapPoFromDb = (r: PurchaseOrderRow): PurchaseOrder => ({ id: r.id, poNumber: r.po_number, supplier: r.supplier, items: (r.items as unknown as any[]) || [], totalAmount: r.total_amount, status: r.status as POStatusKey, orderDate: r.order_date, expectedDeliveryDate: r.expected_delivery_date || undefined, notes: r.notes || undefined });
 
-export const getAllPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
-    const { data, error } = await supabase.from('purchase_orders').select('*');
-    const rows = handleSupabaseError({ data, error }, 'getAllPurchaseOrders') || [];
-    return rows.map(mapPoFromDb);
-};
 export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
-    const { data, error } = await supabase.from('purchase_orders').select('*').order('order_date', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('purchase_orders').select('*');
     const rows = handleSupabaseError({ data, error }, 'getPurchaseOrders') || [];
     return rows.map(mapPoFromDb);
 };
@@ -219,10 +193,6 @@ export const addPurchaseOrder = async (poData: Omit<PurchaseOrder, 'id'>): Promi
     const dbData: Database['public']['Tables']['purchase_orders']['Insert'] = { supplier: poData.supplier, items: poData.items as unknown as Json, total_amount: poData.totalAmount, status: poData.status, order_date: poData.orderDate, expected_delivery_date: poData.expectedDeliveryDate || null, notes: poData.notes, po_number: poData.poNumber };
     const { data, error } = await supabase.from('purchase_orders').insert(dbData).select().single();
     return mapPoFromDb(handleSupabaseError({ data, error }, 'addPurchaseOrder'));
-};
-export const addBulkPurchaseOrders = async (pos: Database['public']['Tables']['purchase_orders']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('purchase_orders').insert(pos);
-    handleSupabaseError({ data: null, error }, 'addBulkPurchaseOrders');
 };
 export const updatePurchaseOrder = async (po: PurchaseOrder): Promise<PurchaseOrder> => {
     const { id, ...rest } = po;
@@ -237,17 +207,13 @@ export const deletePurchaseOrder = (id: string) => supabase.from('purchase_order
 const mapDocFromDb = (r: DocumentRow): Document => ({ id: r.id, docNumber: r.doc_number, type: r.type as DocumentType, clientName: r.client_name, projectName: r.project_name || undefined, date: r.date, amount: r.amount || undefined, status: r.status as DocumentStatusKey, pdfUrl: r.pdf_url || undefined });
 
 export const getDocuments = async (): Promise<Document[]> => {
-    const { data, error } = await supabase.from('documents').select('*').order('date', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('documents').select('*');
     return (handleSupabaseError({ data, error }, 'getDocuments') || []).map(mapDocFromDb);
 };
 export const addDocument = async (doc: Omit<Document, 'id'>): Promise<Document> => {
     const dbData: Database['public']['Tables']['documents']['Insert'] = { doc_number: doc.docNumber, type: doc.type, client_name: doc.clientName, project_name: doc.projectName || null, date: doc.date, amount: doc.amount || null, status: doc.status, pdf_url: doc.pdfUrl || null };
     const { data, error } = await supabase.from('documents').insert(dbData).select().single();
     return mapDocFromDb(handleSupabaseError({ data, error }, 'addDocument'));
-};
-export const addBulkDocuments = async (docs: Database['public']['Tables']['documents']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('documents').insert(docs);
-    handleSupabaseError({ data: null, error }, 'addBulkDocuments');
 };
 export const updateDocument = async (doc: Document): Promise<Document> => {
     const { id, ...rest } = doc;
@@ -291,23 +257,14 @@ export const deleteCalendarEvent = (id: string) => supabase.from('calendar_event
 
 // --- Leave Requests ---
 const mapLeaveFromDb = (r: LeaveRequestRow): LeaveRequest => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, leaveType: r.leave_type as LeaveType, startDate: r.start_date, endDate: r.end_date, reason: r.reason || undefined, status: r.status as LeaveRequestStatus, requestedDate: r.requested_date, approverId: r.approver_id || undefined, approverName: r.approver_name || undefined, approvedDate: r.approved_date || undefined, notes: r.notes || undefined, durationInDays: r.duration_in_days || undefined });
-
-export const getAllLeaveRequests = async (): Promise<LeaveRequest[]> => {
-    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false });
-    return (handleSupabaseError({data, error}, 'getAllLeaveRequests') || []).map(mapLeaveFromDb);
-};
 export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
-    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false });
     return (handleSupabaseError({data, error}, 'getLeaveRequests') || []).map(mapLeaveFromDb);
 };
 export const addLeaveRequest = async (req: Omit<LeaveRequest, 'id'>): Promise<LeaveRequest> => {
     const dbData: Database['public']['Tables']['leave_requests']['Insert'] = { employee_id: req.employeeId, employee_name: req.employeeName, leave_type: req.leaveType, start_date: req.startDate, end_date: req.endDate, reason: req.reason || null, status: req.status, requested_date: req.requestedDate, approver_id: req.approverId || null, approver_name: req.approverName || null, approved_date: req.approvedDate || null, notes: req.notes || null, duration_in_days: req.durationInDays || null };
     const { data, error } = await supabase.from('leave_requests').insert(dbData).select().single();
     return mapLeaveFromDb(handleSupabaseError({data, error}, 'addLeaveRequest'));
-};
-export const addBulkLeaveRequests = async (reqs: Database['public']['Tables']['leave_requests']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('leave_requests').insert(reqs);
-    handleSupabaseError({ data: null, error }, 'addBulkLeaveRequests');
 };
 export const updateLeaveRequest = async (req: LeaveRequest): Promise<LeaveRequest> => {
     const { id, ...rest } = req;
@@ -320,17 +277,13 @@ export const deleteLeaveRequest = (id: string) => supabase.from('leave_requests'
 // --- Cash Advance ---
 const mapCashAdvanceFromDb = (r: CashAdvanceRequestRow): CashAdvanceRequest => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, employeeCode: r.employee_code || undefined, requestDate: r.request_date, amount: r.amount, reason: r.reason, status: r.status as CashAdvanceRequestStatus, approverId: r.approver_id || undefined, approverName: r.approver_name || undefined, approvalDate: r.approval_date || undefined, notes: r.notes || undefined, paymentDate: r.payment_date || undefined });
 export const getCashAdvanceRequests = async (): Promise<CashAdvanceRequest[]> => {
-    const {data, error} = await supabase.from('cash_advance_requests').select('*').order('request_date', {ascending: false}).limit(100);
+    const {data, error} = await supabase.from('cash_advance_requests').select('*').order('request_date', {ascending: false});
     return (handleSupabaseError({data, error}, 'getCashAdvanceRequests') || []).map(mapCashAdvanceFromDb);
 };
 export const addCashAdvanceRequest = async (req: Omit<CashAdvanceRequest, 'id'>): Promise<CashAdvanceRequest> => {
     const dbData: Database['public']['Tables']['cash_advance_requests']['Insert'] = { employee_id: req.employeeId, employee_name: req.employeeName, employee_code: req.employeeCode || null, request_date: req.requestDate, amount: req.amount, reason: req.reason, status: req.status, approver_id: req.approverId || null, approver_name: req.approverName || null, approval_date: req.approvalDate || null, notes: req.notes || null, payment_date: req.paymentDate || null };
     const { data, error } = await supabase.from('cash_advance_requests').insert(dbData).select().single();
     return mapCashAdvanceFromDb(handleSupabaseError({data, error}, 'addCashAdvanceRequest'));
-};
-export const addBulkCashAdvanceRequests = async (reqs: Database['public']['Tables']['cash_advance_requests']['Insert'][]): Promise<void> => {
-    const { error } = await supabase.from('cash_advance_requests').insert(reqs);
-    handleSupabaseError({ data: null, error }, 'addBulkCashAdvanceRequests');
 };
 export const updateCashAdvanceRequest = async (req: CashAdvanceRequest): Promise<CashAdvanceRequest> => {
     const { id, ...rest } = req;
@@ -362,7 +315,7 @@ export const getAllPayrollComponents = getPayrollComponents; // Alias
 
 const mapPayrollRunFromDb = (r: PayrollRunRow): PayrollRun => ({ id: r.id, periodMonth: r.period_month, periodYear: r.period_year, status: r.status as any, dateCreated: r.date_created, dateApproved: r.date_approved || undefined, datePaid: r.date_paid || undefined, payslipIds: r.payslip_ids || [], totalEmployees: r.total_employees, totalGrossPay: r.total_gross_pay, totalDeductions: r.total_deductions, totalNetPay: r.total_net_pay, notes: r.notes || undefined });
 export const getPayrollRuns = async (): Promise<PayrollRun[]> => {
-    const {data, error} = await supabase.from('payroll_runs').select('*').order('date_created', {ascending: false}).limit(50);
+    const {data, error} = await supabase.from('payroll_runs').select('*').order('date_created', {ascending: false});
     return (handleSupabaseError({data, error}, 'getPayrollRuns') || []).map(mapPayrollRunFromDb);
 };
 export const getPayrollRunById = async (id: string): Promise<PayrollRun | null> => {

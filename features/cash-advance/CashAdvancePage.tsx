@@ -204,33 +204,20 @@ export const CashAdvancePage: React.FC = () => {
 
   const handleExportRequests = () => {
     if (!canManageAllRequests) return;
-    const headerMapping = {
-        id: 'ID คำขอ',
-        employeeCode: 'รหัสพนักงาน',
-        employeeName: 'ชื่อพนักงาน',
-        requestDate: 'วันที่ขอเบิก',
-        amount: 'จำนวนเงิน',
-        reason: 'เหตุผล',
-        status: 'สถานะ',
-        approverName: 'ผู้อนุมัติ',
-        approvalDate: 'วันที่อนุมัติ',
-        paymentDate: 'วันที่จ่ายเงิน',
-        notes: 'หมายเหตุ',
-    };
     const dataToExport = allRequests.map(req => ({
-        id: req.id,
-        employeeCode: req.employeeCode,
-        employeeName: req.employeeName,
-        requestDate: new Date(req.requestDate).toLocaleDateString('th-TH'),
-        amount: req.amount,
-        reason: req.reason,
-        status: CASH_ADVANCE_STATUS_TH[req.status],
-        approverName: req.approverName || '-',
-        approvalDate: req.approvalDate ? new Date(req.approvalDate).toLocaleDateString('th-TH') : '-',
-        paymentDate: req.paymentDate ? new Date(req.paymentDate).toLocaleDateString('th-TH') : '-',
-        notes: req.notes || '-',
+        'ID คำขอ': req.id,
+        'รหัสพนักงาน': req.employeeCode,
+        'ชื่อพนักงาน': req.employeeName,
+        'วันที่ขอเบิก': new Date(req.requestDate).toLocaleDateString('th-TH'),
+        'จำนวนเงิน': req.amount,
+        'เหตุผล': req.reason,
+        'สถานะ': CASH_ADVANCE_STATUS_TH[req.status],
+        'ผู้อนุมัติ': req.approverName || '-',
+        'วันที่อนุมัติ': req.approvalDate ? new Date(req.approvalDate).toLocaleDateString('th-TH') : '-',
+        'วันที่จ่ายเงิน': req.paymentDate ? new Date(req.paymentDate).toLocaleDateString('th-TH') : '-',
+        'หมายเหตุ': req.notes || '-',
     }));
-    exportToCsv('cash_advance_requests_data', dataToExport, headerMapping);
+    exportToCsv('cash_advance_requests_data', dataToExport);
   };
 
   const displayedRequests = isRegularStaff && user 

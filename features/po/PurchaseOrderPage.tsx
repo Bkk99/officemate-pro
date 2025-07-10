@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { PurchaseOrder, InventoryItem, UserRole } from '../../types';
-import { MOCK_PURCHASE_ORDERS, MOCK_INVENTORY_ITEMS, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } from '../../services/mockData';
+import { getPurchaseOrders, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, getInventoryItems } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -50,17 +50,25 @@ export const PurchaseOrderPage: React.FC = () => {
   const [currentPO, setCurrentPO] = useState<Omit<PurchaseOrder, 'id' | 'totalAmount' | 'poNumber'> | PurchaseOrder>(initialPOState);
   const [editingPOId, setEditingPOId] = useState<string | null>(null);
 
-  const fetchPOs = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); 
-    setPurchaseOrders(MOCK_PURCHASE_ORDERS);
-    setInventoryItems(MOCK_INVENTORY_ITEMS); 
-    setIsLoading(false);
+    try {
+        const [poData, itemData] = await Promise.all([
+            getPurchaseOrders(),
+            getInventoryItems()
+        ]);
+        setPurchaseOrders(poData);
+        setInventoryItems(itemData);
+    } catch(error) {
+        console.error("Failed to fetch PO data:", error);
+    } finally {
+        setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    fetchPOs();
-  }, [fetchPOs]);
+    fetchData();
+  }, [fetchData]);
 
   const calculateTotalAmount = (items: POItemForm[]): number => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
@@ -121,25 +129,33 @@ export const PurchaseOrderPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    const poDataToSubmit = {
-      ...currentPO,
-      items: currentPO.items, 
-      totalAmount: calculateTotalAmount(currentPO.items),
-    };
-
-    if (editingPOId) {
-      updatePurchaseOrder({ ...poDataToSubmit, id: editingPOId, poNumber: (currentPO as PurchaseOrder).poNumber } as PurchaseOrder);
-    } else {
-      addPurchaseOrder(poDataToSubmit as Omit<PurchaseOrder, 'id' | 'poNumber'>);
+    try {
+        if (editingPOId) {
+            const poDataToSubmit = {
+                ...(currentPO as PurchaseOrder),
+                totalAmount: calculateTotalAmount(currentPO.items),
+            };
+            await updatePurchaseOrder(poDataToSubmit);
+        } else {
+             const poDataToSubmit = {
+                ...(currentPO as Omit<PurchaseOrder, 'id'>),
+                totalAmount: calculateTotalAmount(currentPO.items),
+                poNumber: `PO-${Date.now()}` // Simple PO number generation
+            };
+            await addPurchaseOrder(poDataToSubmit);
+        }
+        await fetchData();
+        handleCloseModal();
+    } catch (error) {
+        console.error("Failed to save PO:", error);
+        alert("เกิดข้อผิดพลาดในการบันทึกใบสั่งซื้อ");
     }
-    await fetchPOs();
-    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบใบสั่งซื้อนี้?')) {
-      deletePurchaseOrder(id);
-      await fetchPOs();
+      await deletePurchaseOrder(id);
+      await fetchData();
     }
   };
 
