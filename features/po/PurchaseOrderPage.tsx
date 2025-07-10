@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { PurchaseOrder, InventoryItem, UserRole } from '../../types';
-import { getPurchaseOrders, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, getInventoryItems } from '../../services/api';
+import { MOCK_PURCHASE_ORDERS, MOCK_INVENTORY_ITEMS, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -41,15 +41,6 @@ const initialPOState: Omit<PurchaseOrder, 'id' | 'totalAmount' | 'poNumber'> = {
   supplier: '', items: [], status: 'Pending', orderDate: new Date().toISOString().split('T')[0],
 };
 
-const PO_STATUSES_COLORS: Record<PurchaseOrder['status'], string> = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Approved: 'bg-blue-100 text-blue-800',
-    Processing: 'bg-indigo-100 text-indigo-800',
-    Shipped: 'bg-purple-100 text-purple-800',
-    Completed: 'bg-green-100 text-green-800',
-    Cancelled: 'bg-red-100 text-red-800',
-};
-
 export const PurchaseOrderPage: React.FC = () => {
   const { user } = useAuth();
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -59,25 +50,17 @@ export const PurchaseOrderPage: React.FC = () => {
   const [currentPO, setCurrentPO] = useState<Omit<PurchaseOrder, 'id' | 'totalAmount' | 'poNumber'> | PurchaseOrder>(initialPOState);
   const [editingPOId, setEditingPOId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchPOs = useCallback(async () => {
     setIsLoading(true);
-    try {
-        const [poData, itemData] = await Promise.all([
-            getPurchaseOrders(),
-            getInventoryItems()
-        ]);
-        setPurchaseOrders(poData);
-        setInventoryItems(itemData);
-    } catch(error) {
-        console.error("Failed to fetch PO data:", error);
-    } finally {
-        setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    setPurchaseOrders(MOCK_PURCHASE_ORDERS);
+    setInventoryItems(MOCK_INVENTORY_ITEMS); 
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchPOs();
+  }, [fetchPOs]);
 
   const calculateTotalAmount = (items: POItemForm[]): number => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
@@ -138,68 +121,46 @@ export const PurchaseOrderPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    try {
-        if (editingPOId) {
-            const poDataToSubmit = {
-                ...(currentPO as PurchaseOrder),
-                totalAmount: calculateTotalAmount(currentPO.items),
-            };
-            await updatePurchaseOrder(poDataToSubmit);
-        } else {
-             const poDataToSubmit = {
-                ...(currentPO as Omit<PurchaseOrder, 'id'>),
-                totalAmount: calculateTotalAmount(currentPO.items),
-                poNumber: `PO-${Date.now()}` // Simple PO number generation
-            };
-            await addPurchaseOrder(poDataToSubmit);
-        }
-        await fetchData();
-        handleCloseModal();
-    } catch (error) {
-        console.error("Failed to save PO:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกใบสั่งซื้อ");
+    const poDataToSubmit = {
+      ...currentPO,
+      items: currentPO.items, 
+      totalAmount: calculateTotalAmount(currentPO.items),
+    };
+
+    if (editingPOId) {
+      updatePurchaseOrder({ ...poDataToSubmit, id: editingPOId, poNumber: (currentPO as PurchaseOrder).poNumber } as PurchaseOrder);
+    } else {
+      addPurchaseOrder(poDataToSubmit as Omit<PurchaseOrder, 'id' | 'poNumber'>);
     }
+    await fetchPOs();
+    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบใบสั่งซื้อนี้?')) {
-      await deletePurchaseOrder(id);
-      await fetchData();
+      deletePurchaseOrder(id);
+      await fetchPOs();
     }
   };
 
   const handleExportPOs = () => {
-    const headerMapping = {
-        poNumber: 'เลขที่ PO',
-        supplier: 'ซัพพลายเออร์',
-        orderDate: 'วันที่สั่งซื้อ',
-        expectedDeliveryDate: 'วันที่คาดว่าจะได้รับ',
-        itemId: 'รหัสสินค้า',
-        itemName: 'ชื่อสินค้า',
-        quantity: 'จำนวน',
-        unitPrice: 'ราคาต่อหน่วย',
-        itemTotal: 'ยอดรวมรายการ',
-        totalAmount: 'ยอดรวม PO',
-        status: 'สถานะ',
-        notes: 'หมายเหตุ',
-    };
     const dataToExport = purchaseOrders.flatMap(po => 
         po.items.map(item => ({
-            poNumber: po.poNumber,
-            supplier: po.supplier,
-            orderDate: new Date(po.orderDate).toLocaleDateString('th-TH'),
-            expectedDeliveryDate: po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('th-TH') : '',
-            itemId: item.itemId,
-            itemName: item.itemName,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            itemTotal: item.quantity * item.unitPrice,
-            totalAmount: po.totalAmount,
-            status: PO_STATUSES_TH[po.status as keyof typeof PO_STATUSES_TH] || po.status,
-            notes: po.notes || '',
+            'เลขที่ PO': po.poNumber,
+            'ซัพพลายเออร์': po.supplier,
+            'วันที่สั่งซื้อ': new Date(po.orderDate).toLocaleDateString('th-TH'),
+            'วันที่คาดว่าจะได้รับ': po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('th-TH') : '',
+            'รหัสสินค้า': item.itemId,
+            'ชื่อสินค้า': item.itemName,
+            'จำนวน': item.quantity,
+            'ราคาต่อหน่วย': item.unitPrice,
+            'ยอดรวมรายการ': item.quantity * item.unitPrice,
+            'ยอดรวม PO': po.totalAmount,
+            'สถานะ': PO_STATUSES_TH[po.status as keyof typeof PO_STATUSES_TH] || po.status,
+            'หมายเหตุ': po.notes || '',
         }))
     );
-    exportToCsv('purchase_orders_data', dataToExport, headerMapping);
+    exportToCsv('purchase_orders_data', dataToExport);
   };
 
   const poColumns = [
@@ -218,6 +179,15 @@ export const PurchaseOrderPage: React.FC = () => {
     )},
   ];
   
+  const PO_STATUSES_COLORS: Record<PurchaseOrder['status'], string> = {
+    Pending: 'bg-yellow-100 text-yellow-800',
+    Approved: 'bg-blue-100 text-blue-800',
+    Processing: 'bg-indigo-100 text-indigo-800',
+    Shipped: 'bg-purple-100 text-purple-800',
+    Completed: 'bg-green-100 text-green-800',
+    Cancelled: 'bg-red-100 text-red-800',
+  };
+
   if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   return (

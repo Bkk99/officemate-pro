@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react'; // Added useState
 import { useAuth } from '../../contexts/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Link } from 'react-router-dom';
 import { NAV_ITEMS, DEPARTMENTS } from '../../constants'; 
 import { UserRole } from '../../types';
-import { AnnouncementSettingsModal } from '../admin/AnnouncementSettingsModal';
-import { Button } from '../../components/ui/Button';
+import { AnnouncementSettingsModal } from '../admin/AnnouncementSettingsModal'; // New Import
+import { Button } from '../../components/ui/Button'; // New Import
 
 // Icons for dashboard cards (simplified)
 const UsersIconSolid = (props: React.SVGProps<SVGSVGElement>) => (
@@ -37,13 +37,6 @@ const MegaphoneIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
   );
 
-const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => ( 
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-      <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
-      <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
-    </svg>
-);
-
 
 const quickStats = [
   { title: 'พนักงานที่ใช้งานอยู่', value: '52', icon: UsersIconSolid, color: 'text-primary-500', bgColor: 'bg-primary-100' },
@@ -55,33 +48,8 @@ const quickStats = [
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
 
   if (!user) return null;
-
-  const handleInstallClick = () => {
-    if (!installPromptEvent) return;
-    installPromptEvent.prompt();
-    installPromptEvent.userChoice.then((choiceResult: { outcome: string }) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the A2HS prompt');
-      } else {
-        console.log('User dismissed the A2HS prompt');
-      }
-      setInstallPromptEvent(null);
-    });
-  };
 
   const accessibleNavItems = NAV_ITEMS.filter(
     item => item.allowedRoles.includes(user.role) && item.path !== '/dashboard' && !item.path.startsWith('/admin/') // Exclude settings from quick links here
@@ -94,31 +62,21 @@ export const DashboardPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <Card>
-        <div className="flex flex-wrap justify-between items-center gap-2">
+        <div className="flex flex-wrap justify-between items-center">
             <div>
                 <h1 className="text-2xl font-semibold text-gray-800">ยินดีต้อนรับกลับ, {user.name}!</h1>
                 <p className="text-gray-600">ภาพรวมพื้นที่ทำงานของคุณ</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-                 {installPromptEvent && (
-                    <Button
-                        variant="primary"
-                        onClick={handleInstallClick}
-                        leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}
-                    >
-                        ติดตั้งแอป
-                    </Button>
-                )}
-                {canManageAnnouncements && (
-                    <Button 
-                        variant="secondary" 
-                        onClick={() => setIsAnnouncementModalOpen(true)}
-                        leftIcon={<MegaphoneIcon className="h-5 w-5"/>}
-                    >
-                        ตั้งค่าประกาศส่วนหัว
-                    </Button>
-                )}
-            </div>
+            {canManageAnnouncements && (
+                <Button 
+                    variant="secondary" 
+                    onClick={() => setIsAnnouncementModalOpen(true)}
+                    leftIcon={<MegaphoneIcon className="h-5 w-5"/>}
+                    className="mt-2 sm:mt-0"
+                >
+                    ตั้งค่าประกาศส่วนหัว
+                </Button>
+            )}
         </div>
       </Card>
 

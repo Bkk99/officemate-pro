@@ -2,13 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { LeaveRequest, LeaveType, LeaveRequestStatus, UserRole, Employee } from '../../types';
 import { 
-    getLeaveRequests,
-    addLeaveRequest, 
-    updateLeaveRequest, 
-    deleteLeaveRequest, 
-    getEmployeeById,
-    getEmployees
-} from '../../services/api';
+    MOCK_LEAVE_REQUESTS, MOCK_EMPLOYEES,
+    addLeaveRequest, updateLeaveRequest, deleteLeaveRequest, getEmployeeById
+} from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -95,21 +91,13 @@ export const LeaveManagementPage: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    try {
-        const [requests, employees] = await Promise.all([
-            getLeaveRequests(),
-            getEmployees()
-        ]);
-        setAllLeaveRequests(requests.map(req => ({
-            ...req,
-            durationInDays: calculateDuration(req.startDate, req.endDate)
-        })));
-        setEmployeesForSelect(employees);
-    } catch(error) {
-        console.error("Failed to fetch leave data:", error);
-    } finally {
-        setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+    setAllLeaveRequests(MOCK_LEAVE_REQUESTS.map(req => ({
+        ...req,
+        durationInDays: calculateDuration(req.startDate, req.endDate)
+    })).sort((a,b) => new Date(b.requestedDate).getTime() - new Date(a.requestedDate).getTime()));
+    setEmployeesForSelect(MOCK_EMPLOYEES);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -188,8 +176,9 @@ export const LeaveManagementPage: React.FC = () => {
         return;
     }
 
-    const employeeDetails = await getEmployeeById(targetEmployeeId);
+    const employeeDetails = getEmployeeById(targetEmployeeId);
     targetEmployeeName = employeeDetails ? employeeDetails.name : targetEmployeeName || 'N/A';
+
 
     const requestData: Partial<LeaveRequest> = {
       ...currentRequest,
@@ -199,29 +188,23 @@ export const LeaveManagementPage: React.FC = () => {
       endDate: new Date(currentRequest.endDate).toISOString(),
     };
 
-    try {
-        if (editingRequestId) {
-            await updateLeaveRequest({ ...requestData, id: editingRequestId } as LeaveRequest);
-        } else {
-            await addLeaveRequest({ 
-                ...requestData, 
-                status: LeaveRequestStatus.PENDING, 
-                requestedDate: new Date().toISOString() 
-            } as Omit<LeaveRequest, 'id'>);
-        }
-    } catch(error) {
-        console.error("Failed to save leave request:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกคำขอลา");
-    } finally {
-        await fetchData();
-        handleCloseModal();
+    if (editingRequestId) {
+      updateLeaveRequest({ ...requestData, id: editingRequestId } as LeaveRequest);
+    } else {
+      addLeaveRequest({ 
+        ...requestData, 
+        status: LeaveRequestStatus.PENDING, 
+        requestedDate: new Date().toISOString() 
+      } as Omit<LeaveRequest, 'id'>);
     }
+    await fetchData();
+    handleCloseModal();
   };
 
   const handleDeleteRequest = async (id: string) => {
     if (!canManageAllRequests) return; // Only Admin/HR can delete
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบคำขอลานี้ถาวร (ใช้สำหรับกรณีข้อมูลผิดพลาด)?')) {
-      await deleteLeaveRequest(id);
+      deleteLeaveRequest(id);
       await fetchData();
     }
   };
@@ -248,14 +231,14 @@ export const LeaveManagementPage: React.FC = () => {
         approvedDate: new Date().toISOString(),
         notes: approvalNotes || requestForApproval.notes,
     };
-    await updateLeaveRequest(updatedRequest);
+    updateLeaveRequest(updatedRequest);
     await fetchData();
     setIsApprovalModalOpen(false);
     setRequestForApproval(null);
   };
   
   const handleCancelRequest = async (request: LeaveRequest) => {
-    const canCancelOwn = isRegularStaff && user && request.employeeId === user.id && (request.status === LeaveRequestStatus.PENDING || request.status === LeaveRequestStatus.APPROVED);
+    const canCancelOwn = isRegularStaff && request.employeeId === user?.id && (request.status === LeaveRequestStatus.PENDING || request.status === LeaveRequestStatus.APPROVED);
     const canAdminCancel = canManageAllRequests && (request.status === LeaveRequestStatus.PENDING || request.status === LeaveRequestStatus.APPROVED);
 
     if (!canCancelOwn && !canAdminCancel) return;
@@ -266,7 +249,7 @@ export const LeaveManagementPage: React.FC = () => {
             status: LeaveRequestStatus.CANCELLED,
             notes: `${request.notes || ''} (ยกเลิกโดย ${user?.name} เมื่อ ${new Date().toLocaleDateString('th-TH')})`.trim()
         };
-        await updateLeaveRequest(updatedRequest);
+        updateLeaveRequest(updatedRequest);
         await fetchData();
     }
   };
@@ -289,37 +272,22 @@ export const LeaveManagementPage: React.FC = () => {
   });
   
   const handleExportLeaves = () => {
-    const headerMapping = {
-        id: 'ID คำขอ',
-        employeeId: 'รหัสพนักงาน',
-        employeeName: 'ชื่อพนักงาน',
-        leaveType: 'ประเภทการลา',
-        startDate: 'วันที่เริ่มลา',
-        endDate: 'วันที่สิ้นสุดลา',
-        durationInDays: 'จำนวนวัน',
-        reason: 'เหตุผล',
-        status: 'สถานะ',
-        requestedDate: 'วันที่ยื่นขอ',
-        approverName: 'ผู้อนุมัติ',
-        approvedDate: 'วันที่อนุมัติ/ปฏิเสธ',
-        notes: 'หมายเหตุ (ผู้ดูแล)',
-    };
     const dataToExport = filteredRequestsForTable.map(req => ({
-        id: req.id,
-        employeeId: req.employeeId,
-        employeeName: req.employeeName,
-        leaveType: LEAVE_TYPES_TH[req.leaveType as LeaveType],
-        startDate: new Date(req.startDate).toLocaleDateString('th-TH'),
-        endDate: new Date(req.endDate).toLocaleDateString('th-TH'),
-        durationInDays: req.durationInDays || 0,
-        reason: req.reason || '',
-        status: LEAVE_REQUEST_STATUS_TH[req.status as LeaveRequestStatus],
-        requestedDate: new Date(req.requestedDate).toLocaleDateString('th-TH'),
-        approverName: req.approverName || '',
-        approvedDate: req.approvedDate ? new Date(req.approvedDate).toLocaleDateString('th-TH') : '',
-        notes: req.notes || '',
+        'ID คำขอ': req.id,
+        'รหัสพนักงาน': req.employeeId,
+        'ชื่อพนักงาน': req.employeeName,
+        'ประเภทการลา': LEAVE_TYPES_TH[req.leaveType as LeaveType],
+        'วันที่เริ่มลา': new Date(req.startDate).toLocaleDateString('th-TH'),
+        'วันที่สิ้นสุดลา': new Date(req.endDate).toLocaleDateString('th-TH'),
+        'จำนวนวัน': req.durationInDays,
+        'เหตุผล': req.reason || '',
+        'สถานะ': LEAVE_REQUEST_STATUS_TH[req.status as LeaveRequestStatus],
+        'วันที่ยื่นขอ': new Date(req.requestedDate).toLocaleDateString('th-TH'),
+        'ผู้อนุมัติ': req.approverName || '',
+        'วันที่อนุมัติ/ปฏิเสธ': req.approvedDate ? new Date(req.approvedDate).toLocaleDateString('th-TH') : '',
+        'หมายเหตุ (ผู้ดูแล)': req.notes || '',
     }));
-    exportToCsv('leave_requests_data', dataToExport, headerMapping);
+    exportToCsv('leave_requests_data', dataToExport);
   };
 
   const columns: TableColumn<LeaveRequest>[] = [
@@ -394,7 +362,7 @@ export const LeaveManagementPage: React.FC = () => {
                 <Select label="พนักงาน" name="employeeId" value={currentRequest.employeeId || ''} onChange={handleChange} options={employeesForSelect.map(e => ({ value: e.id, label: e.name }))} required placeholder="เลือกพนักงาน"/>
             )}
             { (isRegularStaff || (editingRequestId && currentRequest.employeeName)) && (
-                 <Input label="พนักงาน" value={isRegularStaff && user ? user.name : currentRequest.employeeName || ''} disabled wrapperClassName="mb-2"/>
+                 <Input label="พนักงาน" value={isRegularStaff ? user.name : currentRequest.employeeName || ''} disabled wrapperClassName="mb-2"/>
             )}
 
           <Select label="ประเภทการลา" name="leaveType" value={currentRequest.leaveType || LeaveType.ANNUAL} onChange={handleChange} options={LEAVE_TYPE_OPTIONS} required placeholder="เลือกประเภทการลา"/>

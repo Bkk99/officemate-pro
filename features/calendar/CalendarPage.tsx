@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { CalendarEvent, User, UserRole, Employee } from '../../types';
-import { getCalendarEvents, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent, getEmployees } from '../../services/api';
+import { CalendarEvent, User } from '../../types';
+import { MOCK_CALENDAR_EVENTS, MOCK_USERS, addCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -32,37 +33,22 @@ const initialEventState: Omit<CalendarEvent, 'id'> = {
 export const CalendarPage: React.FC = () => {
   const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [attendeeOptions, setAttendeeOptions] = useState<{ value: string; label: string; }[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [users, setUsers] = useState<User[]>(MOCK_USERS); 
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentEvent, setCurrentEvent] = useState<Omit<CalendarEvent, 'id'> | CalendarEvent>(initialEventState);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchEvents = useCallback(async () => {
     setIsLoading(true);
-    try {
-        const [eventData, employeeData] = await Promise.all([
-            getCalendarEvents(),
-            getEmployees()
-        ]);
-        setEvents(eventData);
-        setEmployees(employeeData);
-        // Use employees list for attendees to prevent DB error from profiles table.
-        setAttendeeOptions(employeeData.map(emp => ({
-            value: emp.id,
-            label: emp.name,
-        })));
-    } catch(error) {
-        console.error("Failed to fetch calendar data:", error);
-    } finally {
-        setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    setEvents(MOCK_CALENDAR_EVENTS);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchEvents();
+  }, [fetchEvents]);
 
   const handleOpenModal = (event?: CalendarEvent) => {
     if (event) {
@@ -88,7 +74,7 @@ export const CalendarPage: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (e.target instanceof HTMLInputElement && e.target.type === 'checkbox') {
-      const checkedValue = e.target.checked; 
+      const checkedValue = e.target.checked; // Store in variable before using in callback
       setCurrentEvent(prev => ({ ...prev, [name]: checkedValue }));
     } else {
       setCurrentEvent(prev => ({ ...prev, [name]: value }));
@@ -97,31 +83,31 @@ export const CalendarPage: React.FC = () => {
   
   const handleAttendeeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedIds = Array.from(e.target.selectedOptions, option => option.value);
-    const selectedAttendees = employees
-        .filter(emp => selectedIds.includes(emp.id))
-        .map(emp => ({ employeeId: emp.id, employeeName: emp.name }));
+    const selectedAttendees = users.filter(u => selectedIds.includes(u.id)).map(u => ({ employeeId: u.id, employeeName: u.name }));
     setCurrentEvent(prev => ({ ...prev, attendees: selectedAttendees }));
   };
 
   const handleSubmit = async () => {
-    try {
-        if (editingEventId) {
-            await updateCalendarEvent(currentEvent as CalendarEvent);
-        } else {
-            await addCalendarEvent(currentEvent as Omit<CalendarEvent, 'id'>); 
-        }
-        await fetchData();
-        handleCloseModal();
-    } catch (error) {
-        console.error("Failed to save event:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกกิจกรรม");
+    const eventData: CalendarEvent = {
+        ...(currentEvent as CalendarEvent), 
+        id: editingEventId || `evt${Date.now()}`, 
+        start: new Date(currentEvent.start).toISOString(),
+        end: new Date(currentEvent.end).toISOString(),
+    };
+
+    if (editingEventId) {
+      updateCalendarEvent(eventData);
+    } else {
+      addCalendarEvent(eventData as Omit<CalendarEvent, 'id'>); 
     }
+    await fetchEvents();
+    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบกิจกรรมนี้?')) {
-      await deleteCalendarEvent(id);
-      await fetchData();
+      deleteCalendarEvent(id);
+      await fetchEvents();
     }
   };
   
@@ -188,7 +174,7 @@ export const CalendarPage: React.FC = () => {
                 onChange={handleAttendeeChange}
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md h-32"
             >
-                {attendeeOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
         </div>
         <Textarea label="คำอธิบาย (ถ้ามี)" name="description" value={currentEvent.description || ''} onChange={handleChange} className="mt-4"/>

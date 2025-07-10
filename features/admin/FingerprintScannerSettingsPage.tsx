@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Spinner } from '../../components/ui/Spinner';
 import { FingerprintScannerSettings, TimeLog, Employee } from '../../types';
-import { saveSetting, getSetting, getEmployees, addTimeLog } from '../../services/api'; 
+import { getFingerprintScannerSettings, saveFingerprintScannerSettings, MOCK_EMPLOYEES, addTimeLog } from '../../services/mockData'; 
 import { useAuth } from '../../contexts/AuthContext';
 
 const WifiIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -43,7 +44,7 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
 
   const fetchSettings = useCallback(async () => {
     setIsLoading(true);
-    const savedSettings = await getSetting('fingerprintSettings');
+    const savedSettings = await getFingerprintScannerSettings();
     if (savedSettings) {
       setSettings(prev => ({...prev, ...savedSettings}));
     }
@@ -64,7 +65,7 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
     setSyncFromMessage(null);
     setSyncToMessage(null);
     const settingsToSave = { ...settings, lastSyncStatus: settings.lastSyncStatus || 'Unknown', lastSyncToScannerStatus: settings.lastSyncToScannerStatus || 'Unknown' };
-    await saveSetting('fingerprintSettings', settingsToSave);
+    await saveFingerprintScannerSettings(settingsToSave);
     await new Promise(resolve => setTimeout(resolve, 700)); 
     setIsSaving(false);
     alert("บันทึกการตั้งค่าเครื่องสแกนนิ้วเรียบร้อยแล้ว");
@@ -91,20 +92,35 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
 
         let logsAddedCount = 0;
         let unknownScans = 0;
-        const allEmployees = await getEmployees();
-        
+        const employeeTimestamps: Record<string, { clockIn?: string, clockOut?: string}> = {};
+
         for (const rawLog of mockRawScannerData) {
-            const employee = allEmployees.find(emp => emp.fingerprintScannerId === rawLog.scannerUserId);
+            const employee = MOCK_EMPLOYEES.find(emp => emp.fingerprintScannerId === rawLog.scannerUserId);
             if (employee) {
-                await addTimeLog({
+                if (!employeeTimestamps[employee.id]) employeeTimestamps[employee.id] = {};
+                if(rawLog.type === "clock-in" && !employeeTimestamps[employee.id].clockIn) {
+                    employeeTimestamps[employee.id].clockIn = rawLog.timestamp;
+                } else if (rawLog.type === "clock-out") {
+                    employeeTimestamps[employee.id].clockOut = rawLog.timestamp;
+                }
+            } else {
+                unknownScans++;
+            }
+        }
+        
+        for (const empId in employeeTimestamps) {
+            const empData = employeeTimestamps[empId];
+            const employee = MOCK_EMPLOYEES.find(e => e.id === empId);
+            if(employee && empData.clockIn){
+                 addTimeLog({
                     employeeId: employee.id,
                     employeeName: employee.name,
-                    clockIn: rawLog.timestamp,
+                    clockIn: empData.clockIn,
+                    clockOut: empData.clockOut,
+                    notes: `ซิงค์จากเครื่องสแกนนิ้ว (จำลอง) IP: ${settings.ipAddress}`,
                     source: 'Scanner',
                 });
                 logsAddedCount++;
-            } else {
-                unknownScans++;
             }
         }
 
@@ -112,14 +128,14 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
         setSyncFromMessage(successMsg);
         const newSettings = { ...settings, lastSyncStatus: 'Success' as const, lastSyncTime: new Date().toISOString() };
         setSettings(newSettings);
-        await saveSetting('fingerprintSettings', newSettings);
+        await saveFingerprintScannerSettings(newSettings);
 
     } catch (error) {
         console.error("Mock Sync From Scanner Error:", error);
         setSyncFromMessage("การซิงค์ข้อมูลจากเครื่องล้มเหลว (จำลอง).");
         const newSettings = { ...settings, lastSyncStatus: 'Failed' as const, lastSyncTime: new Date().toISOString() };
         setSettings(newSettings);
-        await saveSetting('fingerprintSettings', newSettings);
+        await saveFingerprintScannerSettings(newSettings);
     }
     setIsSyncingFrom(false);
   };
@@ -132,25 +148,34 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
     setIsSyncingTo(true);
     setSyncToMessage("กำลังซิงค์ข้อมูลพนักงานไปยังเครื่องสแกน (จำลอง)...");
 
-    await new Promise(resolve => setTimeout(resolve, 1500)); 
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay & processing
     try {
-        const allEmployees = await getEmployees();
-        const employeesToSync = allEmployees.filter(emp => emp.status === 'Active' && emp.fingerprintScannerId);
+        const employeesToSync = MOCK_EMPLOYEES.filter(emp => emp.status === 'Active' && emp.fingerprintScannerId);
+        const payload = employeesToSync.map(emp => ({
+            scannerId: emp.fingerprintScannerId,
+            name: emp.name,
+            employeeCode: emp.employeeCode,
+            // Potentially other fields: cardNo, privileges etc.
+        }));
+
+        console.log("Simulated Payload to Scanner:", payload); // Log what would be sent
         
-        console.log("Simulated Payload to Scanner:", employeesToSync.map(e => ({id: e.fingerprintScannerId, name: e.name})));
-        
-        const successMsg = `จำลองการซิงค์ไปยังเครื่องสแกน: ${employeesToSync.length} พนักงานสำเร็จ.`;
+        // Simulate some results
+        const employeesSyncedCount = Math.floor(Math.random() * payload.length) + 1; // Simulate some success
+        const employeesFailedCount = payload.length - employeesSyncedCount;
+
+        const successMsg = `จำลองการซิงค์ไปยังเครื่องสแกน: ${employeesSyncedCount} พนักงานสำเร็จ, ${employeesFailedCount > 0 ? `${employeesFailedCount} ล้มเหลว.` : 'ทั้งหมดสำเร็จ.' }`;
         setSyncToMessage(successMsg);
         const newSettings = { ...settings, lastSyncToScannerStatus: 'Success' as const, lastSyncToScannerTime: new Date().toISOString() };
         setSettings(newSettings);
-        await saveSetting('fingerprintSettings', newSettings);
+        await saveFingerprintScannerSettings(newSettings);
 
     } catch (error) {
         console.error("Mock Sync To Scanner Error:", error);
         setSyncToMessage("การซิงค์ข้อมูลไปยังเครื่องล้มเหลว (จำลอง).");
         const newSettings = { ...settings, lastSyncToScannerStatus: 'Failed' as const, lastSyncToScannerTime: new Date().toISOString() };
         setSettings(newSettings);
-        await saveSetting('fingerprintSettings', newSettings);
+        await saveFingerprintScannerSettings(newSettings);
     }
     setIsSyncingTo(false);
   };
@@ -165,9 +190,31 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
           ตั้งค่า IP Address และ Port ของ Bridge Application หรือเครื่องสแกนนิ้ว. การซิงค์จะช่วยให้ข้อมูลพนักงานและข้อมูลการลงเวลาระหว่างระบบนี้กับเครื่องสแกนตรงกัน.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input label="IP Address (ของ Bridge/Scanner)" name="ipAddress" value={settings.ipAddress} onChange={handleChange} placeholder="เช่น 192.168.1.200" disabled={isSaving || isSyncingFrom || isSyncingTo} />
-          <Input label="Port (ของ Bridge/Scanner)" name="port" type="text" value={settings.port} onChange={handleChange} placeholder="เช่น 4370" disabled={isSaving || isSyncingFrom || isSyncingTo} />
-          <Input label="Device ID (ถ้ามี)" name="deviceId" value={settings.deviceId || ''} onChange={handleChange} placeholder="เช่น 1 (ถ้ามีหลายเครื่อง)" disabled={isSaving || isSyncingFrom || isSyncingTo} />
+          <Input
+            label="IP Address (ของ Bridge/Scanner)"
+            name="ipAddress"
+            value={settings.ipAddress}
+            onChange={handleChange}
+            placeholder="เช่น 192.168.1.200"
+            disabled={isSaving || isSyncingFrom || isSyncingTo}
+          />
+          <Input
+            label="Port (ของ Bridge/Scanner)"
+            name="port"
+            type="text" 
+            value={settings.port}
+            onChange={handleChange}
+            placeholder="เช่น 4370"
+            disabled={isSaving || isSyncingFrom || isSyncingTo}
+          />
+          <Input
+            label="Device ID (ถ้ามี)"
+            name="deviceId"
+            value={settings.deviceId || ''}
+            onChange={handleChange}
+            placeholder="เช่น 1 (ถ้ามีหลายเครื่อง)"
+            disabled={isSaving || isSyncingFrom || isSyncingTo}
+          />
         </div>
         <div className="mt-6 flex flex-wrap gap-2">
           <Button onClick={handleSaveSettings} disabled={isSaving || isSyncingFrom || isSyncingTo} leftIcon={isSaving ? <Spinner size="sm" color="text-white"/> : <WifiIcon className="h-5 w-5"/>}>
@@ -186,14 +233,22 @@ export const FingerprintScannerSettingsPage: React.FC = () => {
             <strong>สถานะ (ดึงข้อมูล):</strong> {syncFromMessage}
           </div>
         )}
-        {settings.lastSyncTime && ( <p className="text-xs text-gray-500 mt-1"> ดึงข้อมูลครั้งล่าสุด: {new Date(settings.lastSyncTime).toLocaleString('th-TH')} - สถานะ: {settings.lastSyncStatus} </p> )}
+        {settings.lastSyncTime && (
+            <p className="text-xs text-gray-500 mt-1">
+                ดึงข้อมูลครั้งล่าสุด: {new Date(settings.lastSyncTime).toLocaleString('th-TH')} - สถานะ: {settings.lastSyncStatus}
+            </p>
+        )}
 
         {syncToMessage && (
           <div className={`mt-4 p-3 rounded-md text-sm ${settings.lastSyncToScannerStatus === 'Success' ? 'bg-green-50 text-green-700' : settings.lastSyncToScannerStatus === 'Failed' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
             <strong>สถานะ (ส่งข้อมูล):</strong> {syncToMessage}
           </div>
         )}
-        {settings.lastSyncToScannerTime && ( <p className="text-xs text-gray-500 mt-1"> ส่งข้อมูลครั้งล่าสุด: {new Date(settings.lastSyncToScannerTime).toLocaleString('th-TH')} - สถานะ: {settings.lastSyncToScannerStatus} </p> )}
+        {settings.lastSyncToScannerTime && (
+            <p className="text-xs text-gray-500 mt-1">
+                ส่งข้อมูลครั้งล่าสุด: {new Date(settings.lastSyncToScannerTime).toLocaleString('th-TH')} - สถานะ: {settings.lastSyncToScannerStatus}
+            </p>
+        )}
       </Card>
 
       <Card title="คำแนะนำการใช้งาน">

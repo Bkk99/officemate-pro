@@ -6,7 +6,6 @@ import { MainLayout, ProtectedRoute } from './components/Layout';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { EmployeePage } from './features/employee/EmployeePage';
 import { InventoryPage } from './features/inventory/InventoryPage';
-import ItInventoryPage from './features/inventory/ItInventoryPage'; // New Import
 import { PurchaseOrderPage } from './features/po/PurchaseOrderPage';
 import { DocumentPage } from './features/documents/DocumentPage';
 import { ChatPage } from './features/chat/ChatPage';
@@ -19,7 +18,6 @@ import { PayrollSettingsPage } from './features/payroll/PayrollSettingsPage';
 import { FingerprintScannerSettingsPage } from './features/admin/FingerprintScannerSettingsPage';
 import { LeaveManagementPage } from './features/leave/LeaveManagementPage'; 
 import { EmployeeIdCardPage } from './features/idcard/EmployeeIdCardPage'; // New Import
-import { CashAdvancePage } from './features/cash-advance/CashAdvancePage'; // New Import
 import { UserRole } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { DEPARTMENTS } from './constants';
@@ -67,11 +65,6 @@ const App: React.FC = () => {
             <InventoryPage />
           </ProtectedRoute>
         } />
-        <Route path="inventory/it" element={ // New Route
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <ItInventoryPage />
-          </ProtectedRoute>
-        } />
         <Route path="purchase-orders" element={
           <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER]}>
             <PurchaseOrderPage />
@@ -99,11 +92,6 @@ const App: React.FC = () => {
                 </ProtectedRoute>
             }/>
         </Route>
-        <Route path="cash-advance" element={
-          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
-            <CashAdvancePage />
-          </ProtectedRoute>
-        } />
         <Route path="chat" element={
          <ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF]}>
             <ChatPage />

@@ -1,7 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { TaxBracket, PayrollComponent } from '../../types';
-import { MOCK_TAX_BRACKETS_SIMPLIFIED } from '../../constants';
-import { getPayrollComponents, addPayrollComponent, updatePayrollComponent, deletePayrollComponent } from '../../services/api';
+import { MOCK_TAX_BRACKETS_SIMPLIFIED, getAllPayrollComponents, addPayrollComponent, updatePayrollComponent, deletePayrollComponent } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -46,14 +46,9 @@ export const PayrollSettingsPage: React.FC = () => {
 
   const fetchSettings = useCallback(async () => {
     setIsLoading(true);
-    setTaxBrackets(MOCK_TAX_BRACKETS_SIMPLIFIED); // This is a constant
-    try {
-        const components = await getPayrollComponents();
-        setPayrollComponents(components);
-    } catch (error) {
-        console.error("Failed to fetch payroll components:", error);
-        // Optionally, set an error state to show in the UI
-    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+    setTaxBrackets(MOCK_TAX_BRACKETS_SIMPLIFIED); 
+    setPayrollComponents(getAllPayrollComponents());
     setIsLoading(false);
   }, []);
 
@@ -101,25 +96,21 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   const handleComponentSubmit = async () => {
-    try {
-        if (editingComponentId) {
-          const originalComponent = payrollComponents.find(c => c.id === editingComponentId);
-          if (originalComponent?.isSystemCalculated) {
-              const { name, type, calculationBasis, ...editableFields } = currentComponent as PayrollComponent;
-              await updatePayrollComponent({ ...originalComponent, ...editableFields });
-          } else {
-            await updatePayrollComponent(currentComponent as PayrollComponent);
-          }
-        } else {
-          await addPayrollComponent(currentComponent as Omit<PayrollComponent, 'id' | 'isSystemCalculated'>);
-        }
-    } catch (error) {
-        console.error("Failed to save payroll component:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล");
-    } finally {
-        await fetchSettings(); 
-        handleCloseComponentModal();
+    if (editingComponentId) {
+      const originalComponent = payrollComponents.find(c => c.id === editingComponentId);
+      if (originalComponent?.isSystemCalculated) {
+          // For system components, only allow editing certain fields like isTaxable, defaultAmount for display.
+          // The core calculation logic for SSF, Tax, PF uses hardcoded rates/logic primarily.
+          const { name, type, calculationBasis, ...editableFields } = currentComponent as PayrollComponent;
+          updatePayrollComponent({ ...originalComponent, ...editableFields });
+      } else {
+        updatePayrollComponent(currentComponent as PayrollComponent);
+      }
+    } else {
+      addPayrollComponent(currentComponent as Omit<PayrollComponent, 'id' | 'isSystemCalculated'>);
     }
+    await fetchSettings(); 
+    handleCloseComponentModal();
   };
 
   const handleComponentDelete = async (id: string) => {
@@ -129,13 +120,8 @@ export const PayrollSettingsPage: React.FC = () => {
         return;
     }
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?')) {
-        try {
-            await deletePayrollComponent(id);
-            await fetchSettings();
-        } catch(error) {
-            console.error("Failed to delete component", error);
-            alert("เกิดข้อผิดพลาดในการลบข้อมูล");
-        }
+      deletePayrollComponent(id);
+      await fetchSettings();
     }
   };
 
@@ -209,6 +195,8 @@ export const PayrollSettingsPage: React.FC = () => {
                 </div>
             )}
             <Input label="จำนวนเงินเริ่มต้น (บาท)" name="defaultAmount" type="number" value={currentComponent.defaultAmount || 0} onChange={handleComponentChange} />
+            {/* Consider adding defaultRate, calculationBasis, cap for more advanced components later */}
+            {/* <Input label="อัตราร้อยละเริ่มต้น (เช่น 0.05 สำหรับ 5%)" name="defaultRate" type="number" value={currentComponent.defaultRate || 0} onChange={handleComponentChange} step="0.001" /> */}
             
             <div className="mt-6 flex justify-end space-x-2">
             <Button variant="secondary" onClick={handleCloseComponentModal}>ยกเลิก</Button>

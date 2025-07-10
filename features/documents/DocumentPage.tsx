@@ -1,18 +1,17 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Document, DocumentType, UserRole } from '../../types';
-import { getDocuments, addDocument, updateDocument, deleteDocument } from '../../services/api';
+import { MOCK_DOCUMENTS, addDocument, updateDocument, deleteDocument } from '../../services/mockData';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import { Input, Textarea } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Table } from '../../components/ui/Table';
-import { DOCUMENT_TYPES_TH, DOCUMENT_TYPES_OPTIONS, DOCUMENT_STATUSES_OPTIONS, DOCUMENT_STATUSES_TH, APP_NAME, COMPANY_ADDRESS_MOCK, COMPANY_LOGO_URL_MOCK } from '../../constants';
+import { DOCUMENT_TYPES_TH, DOCUMENT_TYPES_OPTIONS, DOCUMENT_STATUSES_OPTIONS, DOCUMENT_STATUSES_TH } from '../../constants';
 import { useAuth } from '../../contexts/AuthContext';
 import { Spinner } from '../../components/ui/Spinner';
 import { exportToCsv } from '../../utils/export';
-import { DocumentView } from './DocumentView';
 
 const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
@@ -46,14 +45,6 @@ const initialDocumentState: Omit<Document, 'id' | 'docNumber'> = {
   type: DocumentType.QUOTATION, clientName: '', projectName: '', date: new Date().toISOString().split('T')[0], amount: 0, status: 'Draft', pdfUrl: ''
 };
 
-const DOCUMENT_STATUSES_COLORS: Record<Document['status'], string> = {
-    Draft: 'bg-gray-100 text-gray-800',
-    Sent: 'bg-blue-100 text-blue-800',
-    Paid: 'bg-green-100 text-green-800',
-    Overdue: 'bg-yellow-100 text-yellow-800',
-    Cancelled: 'bg-red-100 text-red-800',
-};
-
 export const DocumentPage: React.FC = () => {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -63,19 +54,11 @@ export const DocumentPage: React.FC = () => {
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DocumentType>(DocumentType.QUOTATION);
 
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [documentForView, setDocumentForView] = useState<Document | null>(null);
-
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
-    try {
-        const docData = await getDocuments();
-        setDocuments(docData);
-    } catch(error) {
-        console.error("Failed to fetch documents:", error);
-    } finally {
-        setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    setDocuments(MOCK_DOCUMENTS);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -107,105 +90,53 @@ export const DocumentPage: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (user?.role === UserRole.STAFF) return;
-    try {
-        if (editingDocId) {
-            await updateDocument(currentDocument as Document);
-        } else {
-            const docWithNumber = { ...currentDocument, docNumber: `${currentDocument.type.substring(0,2).toUpperCase()}-${Date.now()}`};
-            await addDocument(docWithNumber as Omit<Document, 'id'>);
-        }
-        await fetchDocuments();
-        handleCloseModal();
-    } catch (error) {
-        console.error("Failed to save document:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกเอกสาร");
+    if (user?.role === UserRole.STAFF) return; // Staff cannot submit
+    if (editingDocId) {
+      updateDocument(currentDocument as Document);
+    } else {
+      addDocument(currentDocument as Omit<Document, 'id' | 'docNumber'>);
     }
+    await fetchDocuments();
+    handleCloseModal();
   };
 
   const handleDelete = async (id: string) => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot delete
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบเอกสารนี้?')) {
-      await deleteDocument(id);
+      deleteDocument(id);
       await fetchDocuments();
     }
   };
 
-  const handleViewDocument = (doc: Document) => {
-    setDocumentForView(doc);
-    setIsViewModalOpen(true);
-  };
-
-  const handlePrintDocument = () => {
-    const printContents = document.getElementById('document-view-content')?.outerHTML;
-    if (printContents && documentForView) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>พิมพ์เอกสาร - ${documentForView.docNumber}</title>
-              <script src="https://cdn.tailwindcss.com"></script>
-              <script>
-                tailwind.config = {
-                  theme: {
-                    extend: {
-                      colors: {
-                        primary: {"50":"#fff5f7","100":"#ffeef2","200":"#fedde7","300":"#fecbd9","400":"#fdaac9","500":"#fc88b8","600":"#FB6F92","700":"#f4567f","800":"#e4426b","900":"#cc335c","950":"#a52346"},
-                        secondary: {"50":"#f9fafb","100":"#f3f4f6","200":"#e5e7eb","300":"#d1d5db","400":"#9ca3af","500":"#6b7280","600":"#4b5563","700":"#374151","800":"#1f2937","900":"#111827","950":"#030712"}
-                      }
-                    }
-                  }
-                }
-              </script>
-              <style>
-                body { background-color: #f9fafb; }
-                .print\\:hidden { display: none !important; }
-                @media print {
-                  body { background-color: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; margin: 0; padding: 0;}
-                  #document-view-content { page-break-inside: avoid; }
-                }
-              </style>
-            </head>
-            <body>
-              ${printContents}
-              <script type="text/javascript">
-                setTimeout(() => {
-                  window.print();
-                  window.onafterprint = function() { window.close(); }
-                }, 300);
-              </script>
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-      }
+  const handleExportPdf = (doc: Document) => {
+    // In a real app, this would trigger PDF generation and download.
+    // For mock, we'll just log and potentially update the doc if it has a mock URL.
+    console.log(`จำลองการ Export PDF สำหรับเอกสาร: ${doc.docNumber}`);
+    if (!doc.pdfUrl) { // Only assign a mock URL if one doesn't exist
+        const updatedDoc = {...doc, pdfUrl: `/mock-pdfs/${doc.docNumber.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`}; // Sanitize number for URL
+        if (user?.role !== UserRole.STAFF) { // Only Admin/Manager can update the mock URL
+            updateDocument(updatedDoc); 
+        }
+        setDocuments(prevDocs => prevDocs.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+        alert(`PDF สำหรับ ${doc.docNumber} (จำลอง) พร้อมให้ดาวน์โหลด/ดูได้แล้ว`);
+    } else {
+        alert(`PDF สำหรับ ${doc.docNumber} (จำลอง) พร้อมให้ดาวน์โหลด/ดูได้แล้ว`);
     }
   };
 
   const handleExportDocuments = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
-    const headerMapping = {
-        docNumber: 'เลขที่เอกสาร',
-        type: 'ประเภท',
-        clientName: 'ชื่อลูกค้า',
-        projectName: 'โครงการ',
-        date: 'วันที่',
-        amount: 'จำนวนเงิน',
-        status: 'สถานะ',
-        pdfUrl: 'ลิงก์ PDF',
-    };
     const dataToExport = filteredDocuments.map(doc => ({
-        docNumber: doc.docNumber,
-        type: DOCUMENT_TYPES_TH[doc.type],
-        clientName: doc.clientName,
-        projectName: doc.projectName || '',
-        date: new Date(doc.date).toLocaleDateString('th-TH'),
-        amount: doc.amount || 0,
-        status: DOCUMENT_STATUSES_TH[doc.status as keyof typeof DOCUMENT_STATUSES_TH] || doc.status,
-        pdfUrl: doc.pdfUrl || '',
+        'เลขที่เอกสาร': doc.docNumber,
+        'ประเภท': DOCUMENT_TYPES_TH[doc.type],
+        'ชื่อลูกค้า': doc.clientName,
+        'โครงการ': doc.projectName || '',
+        'วันที่': new Date(doc.date).toLocaleDateString('th-TH'),
+        'จำนวนเงิน': doc.amount || 0,
+        'สถานะ': DOCUMENT_STATUSES_TH[doc.status as keyof typeof DOCUMENT_STATUSES_TH] || doc.status,
+        'ลิงก์ PDF': doc.pdfUrl || '',
     }));
-    exportToCsv(`${activeTab.toLowerCase()}_documents_data`, dataToExport, headerMapping);
+    exportToCsv(`${activeTab.toLowerCase()}_documents_data`, dataToExport);
   };
 
 
@@ -221,7 +152,12 @@ export const DocumentPage: React.FC = () => {
     { header: 'สถานะ', accessor: (item: Document) => <span className={`px-2 py-1 text-xs font-semibold rounded-full ${ DOCUMENT_STATUSES_COLORS[item.status] || 'bg-gray-100 text-gray-800' }`}>{DOCUMENT_STATUSES_TH[item.status as keyof typeof DOCUMENT_STATUSES_TH] || item.status}</span>},
     { header: 'การดำเนินการ', accessor: (item: Document) => (
       <div className="space-x-1">
-        <Button variant="ghost" size="sm" onClick={() => handleViewDocument(item)} title="ดูเอกสาร"><EyeIcon className="h-4 w-4 text-primary-600"/></Button>
+        {item.pdfUrl && (
+            <a href={item.pdfUrl} target="_blank" rel="noopener noreferrer" title="ดู PDF">
+                <Button variant="ghost" size="sm"><EyeIcon className="h-4 w-4 text-primary-600"/></Button>
+            </a>
+        )}
+        <Button variant="ghost" size="sm" onClick={() => handleExportPdf(item)} title="Export เป็น PDF"><ArrowDownTrayIconDoc className="h-4 w-4 text-green-600"/></Button>
         {user?.role !== UserRole.STAFF && (
           <>
             <Button variant="ghost" size="sm" onClick={() => handleOpenModal(item)} title="แก้ไขเอกสาร"><PencilIcon className="h-4 w-4"/></Button>
@@ -232,6 +168,14 @@ export const DocumentPage: React.FC = () => {
     )},
   ];
   
+  const DOCUMENT_STATUSES_COLORS: Record<Document['status'], string> = {
+    Draft: 'bg-gray-100 text-gray-800',
+    Sent: 'bg-blue-100 text-blue-800',
+    Paid: 'bg-green-100 text-green-800',
+    Overdue: 'bg-yellow-100 text-yellow-800',
+    Cancelled: 'bg-red-100 text-red-800',
+  };
+
   if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   return (
@@ -300,21 +244,6 @@ export const DocumentPage: React.FC = () => {
             <Button variant="secondary" onClick={handleCloseModal}>ยกเลิก</Button>
             <Button onClick={handleSubmit}>{editingDocId ? 'บันทึกการเปลี่ยนแปลง' : 'สร้างเอกสาร'}</Button>
           </div>
-        </Modal>
-      )}
-
-      {documentForView && (
-        <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title={`ดูตัวอย่าง: ${DOCUMENT_TYPES_TH[documentForView.type]} #${documentForView.docNumber}`} size="xl">
-            <DocumentView 
-              document={documentForView}
-              companyName={APP_NAME}
-              companyAddress={COMPANY_ADDRESS_MOCK}
-              companyLogoUrl={COMPANY_LOGO_URL_MOCK}
-            />
-            <div className="mt-6 flex justify-end space-x-2 print:hidden">
-              <Button variant="secondary" onClick={() => setIsViewModalOpen(false)}>ปิด</Button>
-              <Button onClick={handlePrintDocument}>พิมพ์</Button>
-            </div>
         </Modal>
       )}
     </div>

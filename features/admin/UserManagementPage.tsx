@@ -1,110 +1,174 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ManagedUser, UserRole } from '../../types';
-import { getManagedUsers, updateUserRole } from '../../services/api';
+import { User, UserRole } from '../../types';
+import { MOCK_USERS, addUserAccount, updateUserAccount, deleteUserAccount } from '../../services/mockData'; 
 import { Card } from '../../components/ui/Card';
-import { Table, TableColumn } from '../../components/ui/Table';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { Table } from '../../components/ui/Table';
+import { DEPARTMENTS } from '../../constants'; 
+import { useAuth } from '../../contexts/AuthContext';
 import { Spinner } from '../../components/ui/Spinner';
 
-const UserRoleOptions = Object.values(UserRole).map(role => ({ value: role, label: role }));
-
-const InformationCircleIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-    </svg>
+const PlusIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+    <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+  </svg>
+);
+const PencilIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+    <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+  </svg>
+);
+const TrashIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25V4c.827-.05 1.66-.075 2.5-.075zM8.47 9.03a.75.75 0 00-1.084-1.03l-1.5 1.75a.75.75 0 101.084 1.03l1.5-1.75zm3.116-1.03a.75.75 0 00-1.084 1.03l1.5 1.75a.75.75 0 101.084-1.03l-1.5-1.75z" clipRule="evenodd" />
+  </svg>
 );
 
+const initialUserState: Omit<User, 'id'> & { password?: string } = {
+  username: '', password: '', name: '', role: UserRole.STAFF, department: ''
+};
+
+const USER_ROLES_TH: Record<UserRole, string> = {
+    [UserRole.ADMIN]: 'ผู้ดูแลระบบ (Admin)',
+    [UserRole.MANAGER]: 'ผู้จัดการ (Manager)',
+    [UserRole.STAFF]: 'พนักงาน (Staff)',
+}
+const USER_ROLES_OPTIONS = Object.values(UserRole).map(role => ({ value: role, label: USER_ROLES_TH[role] }));
+const DEPARTMENT_OPTIONS = DEPARTMENTS.map(dep => ({value: dep, label: dep}));
+
+
 export const UserManagementPage: React.FC = () => {
-  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const { user: adminUser, updateUserContext } = useAuth(); 
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentUserForm, setCurrentUserForm] = useState<Omit<User, 'id'> | User & { password?: string }>(initialUserState);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
-    try {
-      const managedUsers = await getManagedUsers();
-      setUsers(managedUsers);
-    } catch (err: any) {
-      console.error("Failed to fetch users:", err);
-      if (err.message && (err.message.includes('function get_my_claim(text) does not exist') || err.message.includes('permission denied'))) {
-         setError("เกิดข้อผิดพลาดฐานข้อมูล: อาจเกิดจากฟังก์ชัน 'get_my_claim' ไม่มีอยู่ หรือ RLS ไม่ถูกต้อง กรุณารันสคริปต์ 'database.sql' ที่ให้มาใน Supabase SQL Editor เพื่อแก้ไข");
-      } else {
-         setError('ไม่สามารถโหลดข้อมูลผู้ใช้ได้ คุณอาจไม่มีสิทธิ์ที่จำเป็น');
-      }
-    } finally {
-      setIsLoading(false);
-    }
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    setUsers(MOCK_USERS);
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleRoleChange = async (userId: string, newRole: UserRole) => {
-    const originalUsers = [...users];
-    
-    // Optimistic update
-    setUsers(currentUsers =>
-      currentUsers.map(u => (u.id === userId ? { ...u, role: newRole } : u))
-    );
-
-    try {
-      await updateUserRole(userId, newRole);
-    } catch (err) {
-      console.error('Failed to update role:', err);
-      alert('การอัปเดตสิทธิ์ล้มเหลว กำลังคืนค่าเดิม');
-      // Revert on error
-      setUsers(originalUsers);
+  const handleOpenModal = (userToEdit?: User) => {
+    if (userToEdit) {
+      setCurrentUserForm({...userToEdit, password: '' }); 
+      setEditingUserId(userToEdit.id);
+    } else {
+      setCurrentUserForm(initialUserState);
+      setEditingUserId(null);
     }
+    setIsModalOpen(true);
   };
 
-  const columns: TableColumn<ManagedUser>[] = [
-    { header: 'ชื่อเต็ม', accessor: (item) => item.full_name || '(ยังไม่ได้ตั้งค่า)' },
-    { header: 'อีเมล', accessor: 'username' },
-    { header: 'แผนก', accessor: (item) => item.department || '-' },
-    {
-      header: 'สิทธิ์การใช้งาน',
-      accessor: (user) => (
-        <Select
-          value={user.role || ''}
-          onChange={(e) => handleRoleChange(user.id, e.target.value as UserRole)}
-          options={UserRoleOptions}
-          wrapperClassName="!mb-0"
-          aria-label={`Role for ${user.username}`}
-        />
-      ),
-      className: 'w-48'
-    },
-     { header: 'อัปเดตล่าสุด', accessor: (item) => item.updated_at ? new Date(item.updated_at).toLocaleString('th-TH') : 'N/A' },
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setCurrentUserForm(initialUserState);
+    setEditingUserId(null);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setCurrentUserForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async () => {
+    const { password, ...userData } = currentUserForm as User & { password?: string };
+    
+    if (editingUserId) {
+      const updatedUser = password ? { ...userData, password } : userData;
+      updateUserAccount(updatedUser as User);
+       if (adminUser && adminUser.id === editingUserId) { 
+        updateUserContext(updatedUser as User);
+      }
+    } else {
+      if (!password) {
+          alert("รหัสผ่านจำเป็นสำหรับผู้ใช้ใหม่"); 
+          return;
+      }
+      addUserAccount({ ...userData, password } as Omit<User, 'id'> & { password?: string});
+    }
+    await fetchUsers();
+    handleCloseModal();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (adminUser && id === adminUser.id) {
+        alert("คุณไม่สามารถลบบัญชีของตนเองได้");
+        return;
+    }
+    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบบัญชีผู้ใช้นี้?')) {
+      deleteUserAccount(id);
+      await fetchUsers();
+    }
+  };
+  
+  const userColumns = [
+    { header: 'ชื่อผู้ใช้', accessor: 'username' },
+    { header: 'ชื่อ-นามสกุล', accessor: 'name' },
+    { header: 'บทบาท', accessor: (item: User) => USER_ROLES_TH[item.role] || item.role },
+    { header: 'แผนก', accessor: (item: User) => item.department || 'N/A' },
+    { header: 'การดำเนินการ', accessor: (item: User) => (
+      <div className="space-x-2">
+        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(item)} title="แก้ไขผู้ใช้"><PencilIcon className="h-4 w-4"/></Button>
+        {adminUser && item.id !== adminUser.id && ( 
+            <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} title="ลบผู้ใช้"><TrashIcon className="h-4 w-4 text-red-500"/></Button>
+        )}
+      </div>
+    )},
   ];
 
-  if (error) {
-    return (
-        <Card title="เกิดข้อผิดพลาด">
-            <div className="p-4 bg-red-50 border-l-4 border-red-400 text-red-800 rounded-md">
-                 <div className="flex">
-                    <div className="flex-shrink-0">
-                        <InformationCircleIcon className="h-6 w-6 text-red-400" aria-hidden="true" />
-                    </div>
-                    <div className="ml-3">
-                        <h3 className="text-lg font-bold">ไม่สามารถโหลดหน้าจัดการผู้ใช้ได้</h3>
-                        <p className="mt-2 text-md">{error}</p>
-                    </div>
-                 </div>
-            </div>
-        </Card>
-    );
-  }
+  if (isLoading) return <div className="flex justify-center items-center h-64"><Spinner size="lg" /></div>;
 
   return (
-    <Card title="จัดการผู้ใช้งานและสิทธิ์">
-      <p className="text-sm text-gray-600 mb-4">
-        ที่หน้านี้ คุณสามารถเปลี่ยนแปลงสิทธิ์การใช้งานของผู้ใช้แต่ละคนได้ ผู้ใช้ใหม่ที่ลงทะเบียนจะได้รับสิทธิ์ 'Staff' เป็นค่าเริ่มต้น
-        หากต้องการเพิ่มผู้ใช้ใหม่ กรุณาใช้ระบบเชิญผู้ใช้ (Invite user) ใน Supabase Dashboard ของคุณ
-      </p>
-      <Table columns={columns} data={users} isLoading={isLoading} emptyMessage="ไม่พบข้อมูลผู้ใช้" />
-    </Card>
+    <div className="space-y-6">
+      <Card 
+        title="จัดการบัญชีผู้ใช้งาน"
+        actions={<Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>สร้างผู้ใช้</Button>}
+      >
+        <Table 
+            columns={userColumns.map(col => ({
+                ...col,
+                accessor: typeof col.accessor === 'string' ? col.accessor as keyof User : col.accessor as (item: User) => React.ReactNode,
+            }))} 
+            data={users} 
+            isLoading={isLoading}
+            emptyMessage="ไม่พบข้อมูลผู้ใช้งาน"
+        />
+      </Card>
+
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingUserId ? 'แก้ไขบัญชีผู้ใช้' : 'สร้างบัญชีผู้ใช้ใหม่'} size="lg">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input label="ชื่อผู้ใช้ (Username)" name="username" value={currentUserForm.username} onChange={handleChange} required />
+            <Input label="ชื่อ-นามสกุล" name="name" value={currentUserForm.name} onChange={handleChange} required />
+            <Input 
+              label={editingUserId ? "รหัสผ่านใหม่ (เว้นว่างถ้าไม่ต้องการเปลี่ยน)" : "รหัสผ่าน"}
+              name="password" 
+              type="password" 
+              value={(currentUserForm as User & { password?: string }).password || ''} 
+              onChange={handleChange} 
+              required={!editingUserId}
+            />
+            <Select label="บทบาท" name="role" value={currentUserForm.role} onChange={handleChange} options={USER_ROLES_OPTIONS} required />
+            {(currentUserForm.role === UserRole.MANAGER || currentUserForm.role === UserRole.STAFF) && (
+                 <Select label="แผนก (ถ้ามีสำหรับพนักงาน)" name="department" value={currentUserForm.department || ''} onChange={handleChange} options={DEPARTMENT_OPTIONS} placeholder="เลือกแผนก"/>
+            )}
+        </div>
+        <div className="mt-6 flex justify-end space-x-2">
+          <Button variant="secondary" onClick={handleCloseModal}>ยกเลิก</Button>
+          <Button onClick={handleSubmit}>{editingUserId ? 'บันทึกการเปลี่ยนแปลง' : 'สร้างผู้ใช้'}</Button>
+        </div>
+      </Modal>
+    </div>
   );
 };

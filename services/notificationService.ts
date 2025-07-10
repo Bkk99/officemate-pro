@@ -1,7 +1,7 @@
 import { ChatMessage, PayrollRunStatus } from '../types';
-import { getSetting, saveSetting } from './api';
+import { CHAT_ROOMS_SAMPLE } from '../constants'; // To know all room IDs
 
-// --- Chat Notification System (Local Dispatch) ---
+// --- Chat Notification System ---
 type ChatNotificationListener = (message: ChatMessage) => void;
 const chatListeners: ChatNotificationListener[] = [];
 
@@ -31,51 +31,58 @@ export const dispatchPayrollStatusNotification = (runPeriod: string, status: Pay
     return; 
   }
 
-  const systemMessage: ChatMessage = {
-    id: `sysmsg-payroll-${Date.now()}`,
-    roomId: 'general', // Or broadcast to all rooms
-    senderId: 'system-payroll', 
-    senderName: 'ระบบบัญชีเงินเดือน',
-    timestamp,
-    text: messageText,
-  };
-  dispatchChatNotification(systemMessage);
+  CHAT_ROOMS_SAMPLE.forEach(room => {
+    const systemMessage: ChatMessage = {
+      id: `sysmsg-payroll-${room.id}-${Date.now()}`,
+      roomId: room.id,
+      senderId: 'system-payroll', 
+      senderName: 'ระบบบัญชีเงินเดือน',
+      timestamp,
+      text: messageText,
+    };
+    dispatchChatNotification(systemMessage);
+  });
 };
 
-// --- Global Scrolling Announcement System (Using services/api.ts -> Supabase) ---
+// --- Global Scrolling Announcement System ---
+let currentGlobalAnnouncement: string | null = localStorage.getItem('officemate-global-announcement');
 type AnnouncementListener = (announcement: string | null) => void;
 const announcementListeners: AnnouncementListener[] = [];
 
-export const getGlobalAnnouncement = async (): Promise<string | null> => {
-  try {
-    const value = await getSetting('global_announcement');
-    // Set a default if null/undefined is returned from db for the first time
-    return value !== null && value !== undefined ? value : "ยินดีต้อนรับสู่ Officemate Pro! ระบบเชื่อมต่อกับฐานข้อมูลแล้ว";
-  } catch (error) {
-    console.error("Failed to get global announcement:", error);
-    return null;
-  }
+export const getGlobalAnnouncement = (): string | null => {
+  return localStorage.getItem('officemate-global-announcement');
 };
 
-export const setGlobalAnnouncement = async (text: string | null): Promise<void> => {
-  try {
-    await saveSetting('global_announcement', text);
-    announcementListeners.forEach(listener => listener(text));
-  } catch(error) {
-      console.error("Failed to set global announcement:", error);
+export const setGlobalAnnouncement = (text: string | null): void => {
+  currentGlobalAnnouncement = text; 
+  if (text === null || text.trim() === "") {
+    localStorage.removeItem('officemate-global-announcement');
+    currentGlobalAnnouncement = null; 
+  } else {
+    localStorage.setItem('officemate-global-announcement', text);
   }
+  announcementListeners.forEach(listener => listener(currentGlobalAnnouncement));
 };
 
 export const subscribeToGlobalAnnouncement = (listener: AnnouncementListener): (() => void) => {
   announcementListeners.push(listener);
-  // Initial fetch
-  getGlobalAnnouncement().then(value => listener(value));
+  listener(localStorage.getItem('officemate-global-announcement'));
+  
+  const storageEventListener = (event: StorageEvent) => {
+    if (event.key === 'officemate-global-announcement') {
+      const newValue = event.newValue;
+      currentGlobalAnnouncement = newValue; 
+      listener(newValue);
+    }
+  };
+  window.addEventListener('storage', storageEventListener);
 
   return () => {
     const index = announcementListeners.indexOf(listener);
     if (index > -1) {
       announcementListeners.splice(index, 1);
     }
+    window.removeEventListener('storage', storageEventListener);
   };
 };
 
