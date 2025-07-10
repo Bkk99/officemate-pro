@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react'; 
 import { NavLink, Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -67,11 +68,10 @@ const SidebarNavItem: React.FC<{ item: NavItem; isOpenMobile: boolean; toggleMob
   // Determine the display name for "Employee ID Cards" link
   let displayName = item.name;
   if (user && item.path === '/employee-cards') {
-    const isHRStaff = user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]; // DEPARTMENTS[3] is 'ฝ่ายบุคคล'
+    const isHRStaff = user.department === DEPARTMENTS[3]; // DEPARTMENTS[3] is 'ฝ่ายบุคคล'
     if (user.role === UserRole.STAFF && !isHRStaff) {
       displayName = 'แสดงบัตรพนักงาน';
     }
-    // For Admin, Manager, and HR Staff, it keeps item.name which is "สร้างบัตรพนักงาน"
   }
 
 
@@ -164,10 +164,6 @@ const Sidebar: React.FC<{ isOpen: boolean; toggleSidebar: () => void; }> = ({ is
         <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS
             .filter(item => {
-              const isHRStaff = user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]; // DEPARTMENTS[3] is 'ฝ่ายบุคคล'
-              if (item.path === '/leave-management' || item.path === '/employee-cards') { 
-                return item.allowedRoles.includes(user.role) || isHRStaff; 
-              }
               return item.allowedRoles.includes(user.role);
             })
             .map((item) => (
@@ -184,7 +180,7 @@ const Sidebar: React.FC<{ isOpen: boolean; toggleSidebar: () => void; }> = ({ is
                 <UserCircleIcon className="h-8 w-8 text-secondary-300 mr-2"/>
                 <div>
                     <p className="text-sm font-medium text-white">{user.name}</p>
-                    <p className="text-xs text-secondary-400">{user.role} {user.department ? `- ${user.department}`: ''}</p>
+                    <p className="text-xs text-secondary-400">{user.role}</p>
                 </div>
             </div>
             <button
@@ -223,11 +219,11 @@ const Header: React.FC<{ toggleSidebar: () => void; }> = ({ toggleSidebar }) => 
   // Dynamic page title based on user role for employee cards
   let pageTitle = currentNavItem ? currentNavItem.name : APP_NAME;
   if (user && currentNavItem?.path === '/employee-cards') {
-    const isHRStaff = user.role === UserRole.STAFF && user.department === DEPARTMENTS[3];
+    const isHRStaff = user.department === DEPARTMENTS[3]; // 'ฝ่ายบุคคล'
     if (user.role === UserRole.STAFF && !isHRStaff) {
       pageTitle = 'แสดงบัตรพนักงาน';
     }
-    // For Admin, Manager, HR Staff - it keeps "สร้างบัตรพนักงาน"
+    // For Admin, Manager, it keeps "สร้างบัตรพนักงาน"
   }
 
 
@@ -249,7 +245,7 @@ const Header: React.FC<{ toggleSidebar: () => void; }> = ({ toggleSidebar }) => 
                 <UserCircleIcon className="h-8 w-8 text-gray-500"/>
                 <div>
                     <p className="text-sm font-medium text-gray-700">{user.name}</p>
-                    <p className="text-xs text-gray-500">{user.role} {user.department ? `- ${user.department}`: ''}</p>
+                    <p className="text-xs text-gray-500">{user.role}</p>
                 </div>
             </div>
           )}
@@ -314,7 +310,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   let canAccess = allowedRoles.includes(user.role);
 
-  if (hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) { 
+  if (hrStaffOverride && user.role === UserRole.STAFF && user.department === DEPARTMENTS[3]) { // DEPARTMENTS[3] is 'ฝ่ายบุคคล'
     canAccess = true;
   }
 

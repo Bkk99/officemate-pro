@@ -15,7 +15,7 @@ export interface User {
   username: string;
   role: UserRole;
   name: string;
-  department?: string; // Optional, can be relevant for managers
+  department?: string;
 }
 
 export interface EmployeeAllowance {
@@ -357,7 +357,6 @@ export interface ManagedUser {
   full_name: string | null;
   username: string | null; // This will hold the email
   role: UserRole | null;
-  department: string | null;
   updated_at: string | null;
 }
 
@@ -887,7 +886,6 @@ export interface Database {
       }
       profiles: {
         Row: {
-          department: string | null
           full_name: string | null
           id: string
           role: Database["public"]["Enums"]["user_role"] | null
@@ -895,7 +893,6 @@ export interface Database {
           username: string | null
         }
         Insert: {
-          department?: string | null
           full_name?: string | null
           id: string
           role?: Database["public"]["Enums"]["user_role"] | null
@@ -903,7 +900,6 @@ export interface Database {
           username?: string | null
         }
         Update: {
-          department?: string | null
           full_name?: string | null
           id?: string
           role?: Database["public"]["Enums"]["user_role"] | null

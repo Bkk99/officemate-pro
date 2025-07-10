@@ -5,7 +5,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { APP_NAME } from '../../constants';
-import { supabase } from '../../lib/supabaseClient';
 
 const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -15,8 +14,8 @@ const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin@officemate.com');
+  const [password, setPassword] = useState('admin12345');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -27,10 +26,6 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supabase) {
-        setError("Supabase is not configured. Please check the console and configuration files.");
-        return;
-    }
     setError('');
     setIsLoading(true);
     const { success, error: authError } = await login(username, password);
@@ -94,7 +89,7 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
             <div>
-              <Button type="submit" variant="primary" className="w-full" disabled={isLoading || !supabase}>
+              <Button type="submit" variant="primary" className="w-full" disabled={isLoading}>
                 {isLoading ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
               </Button>
             </div>

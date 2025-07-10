@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { ManagedUser, UserRole } from '../../types';
 import { getManagedUsers, updateUserRole } from '../../services/api';
@@ -63,7 +64,6 @@ export const UserManagementPage: React.FC = () => {
   const columns: TableColumn<ManagedUser>[] = [
     { header: 'ชื่อเต็ม', accessor: (item) => item.full_name || '(ยังไม่ได้ตั้งค่า)' },
     { header: 'อีเมล', accessor: 'username' },
-    { header: 'แผนก', accessor: (item) => item.department || '-' },
     {
       header: 'สิทธิ์การใช้งาน',
       accessor: (user) => (
