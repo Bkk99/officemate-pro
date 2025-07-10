@@ -4,7 +4,7 @@ import { Select } from '../../components/ui/Select';
 import { Spinner } from '../../components/ui/Spinner';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { MONTH_OPTIONS, YEAR_OPTIONS, DEPARTMENTS, LEAVE_TYPES_TH, PO_STATUSES_TH, DOCUMENT_TYPES_TH, CASH_ADVANCE_STATUS_TH, DOCUMENT_STATUSES_TH, EMPLOYEE_STATUSES_TH } from '../../constants';
-import { getAllEmployees, getAllInventoryItems, getAllPurchaseOrders, getAllLeaveRequests } from '../../services/api';
+import { getAllEmployees, getInventoryItems, getAllPurchaseOrders, getAllLeaveRequests } from '../../services/api';
 import { Employee, PurchaseOrder, LeaveRequest, InventoryItem, LeaveType, POStatusKey, EmployeeStatusKey } from '../../types';
 
 const COLORS = ['#FB6F92', '#ff85a1', '#ff99b9', '#ffb3ce', '#ffcce2', '#6b7280', '#9ca3af', '#d1d5db'];
@@ -39,7 +39,7 @@ export const ReportPage: React.FC = () => {
         try {
             const [empData, invData, poData, leaveData] = await Promise.all([
                 getAllEmployees(),
-                getAllInventoryItems(),
+                getInventoryItems(),
                 getAllPurchaseOrders(),
                 getAllLeaveRequests(),
             ]);

@@ -1,125 +1,367 @@
 // services/api.ts
-import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, EmployeeStatusKey, POStatusKey, DocumentStatusKey, DocumentType, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeAllowance, EmployeeDeduction, PayslipItem, ManagedUser, UserRole } from '../types';
-import { DEFAULT_PAYROLL_COMPONENTS } from '../constants';
+import { supabase } from '../lib/supabaseClient';
+import { User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, Json, UserRole, ManagedUser, Database } from '../types';
 
-// --- MOCK DATA ---
+// --- Helper Functions ---
+const handleApiError = (error: any, context: string) => {
+    console.error(`Supabase error in ${context}:`, error);
+    throw new Error(`Failed to ${context}. ${error.message}`);
+};
 
-const MOCK_EMPLOYEES: Employee[] = [
-    { id: 'emp-001', name: 'สมชาย ใจดี', employeeCode: 'EMP001', email: 'somchai.j@example.com', phone: '0812345678', department: 'ฝ่ายขาย', position: 'ผู้จัดการ', status: 'Active', hireDate: '2022-01-15T00:00:00Z', baseSalary: 50000, recurringAllowances: [{id: '1', name: 'ค่าเดินทาง', amount: 3000}], recurringDeductions: [] },
-    { id: 'emp-002', name: 'สมศรี มีสุข', employeeCode: 'EMP002', email: 'somsri.m@example.com', phone: '0823456789', department: 'ฝ่ายการตลาด', position: 'พนักงาน', status: 'Active', hireDate: '2023-03-10T00:00:00Z', baseSalary: 25000, recurringAllowances: [], recurringDeductions: [] },
-    { id: 'emp-003', name: 'มานะ อดทน', employeeCode: 'EMP003', email: 'mana.o@example.com', phone: '0834567890', department: 'ฝ่ายไอที', position: 'ผู้เชี่ยวชาญ', status: 'On Leave', hireDate: '2021-11-20T00:00:00Z', baseSalary: 45000, recurringAllowances: [], recurringDeductions: [] },
-];
-
-const MOCK_MANAGED_USERS: ManagedUser[] = [
-    { id: 'user-001', full_name: 'แอดมิน (Mock)', username: 'admin@officemate.com', role: UserRole.ADMIN, updated_at: new Date().toISOString() },
-    { id: 'user-002', full_name: 'สมชาย ใจดี', username: 'somchai.j@example.com', role: UserRole.MANAGER, updated_at: new Date().toISOString() },
-    { id: 'user-003', full_name: 'สมศรี มีสุข', username: 'somsri.m@example.com', role: UserRole.STAFF, updated_at: new Date().toISOString() },
-]
-
-// --- API Functions (Mocked) ---
-
-const mockDelay = (ms = 200) => new Promise(res => setTimeout(res, ms));
+// --- API Functions (Live Supabase) ---
 
 // User Profiles
-export const getUserProfile = async (userId: string) => { await mockDelay(); return null; };
-export const getAllUserProfiles = async (): Promise<User[]> => { await mockDelay(); return []; };
+export const getUserProfile = async (userId: string): Promise<User | null> => {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    if (error) handleApiError(error, `fetch profile for user ${userId}`);
+    
+    const { data: employeeData, error: employeeError } = await supabase
+        .from('employees')
+        .select('department')
+        .eq('email', data?.username || '')
+        .single();
+
+    return data ? {
+        id: data.id,
+        username: data.username || '',
+        name: data.full_name || 'No Name',
+        role: data.role || UserRole.STAFF,
+        department: employeeData?.department || undefined
+    } : null;
+};
+
+export const getAllUserProfiles = async (): Promise<User[]> => {
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) handleApiError(error, 'fetch all profiles');
+    return (data || []).map(p => ({
+        id: p.id,
+        username: p.username || '',
+        name: p.full_name || 'No Name',
+        role: p.role || UserRole.STAFF,
+    }));
+};
 
 // Employees
-export const getAllEmployees = async (): Promise<Employee[]> => { await mockDelay(); return MOCK_EMPLOYEES; };
-export const getEmployees = async (): Promise<Employee[]> => { await mockDelay(); return MOCK_EMPLOYEES; };
-export const getEmployeeById = async (id: string): Promise<Employee | null> => { await mockDelay(); return MOCK_EMPLOYEES.find(e => e.id === id) || null; };
-export const addEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<Employee> => { await mockDelay(); return { ...employeeData, id: `mock-${Date.now()}` }; };
-export const addBulkEmployees = async (employees: any[]): Promise<void> => { await mockDelay(); return; };
-export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => { await mockDelay(); return updatedEmployee; };
-export const deleteEmployee = async (id: string) => { await mockDelay(); return; };
+export const getEmployees = async (): Promise<Employee[]> => {
+    const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false });
+    if (error) handleApiError(error, 'fetch employees');
+    return (data || []).map(e => ({...e, recurringAllowances: (e.recurring_allowances as any) || [], recurringDeductions: (e.recurring_deductions as any) || []}));
+};
+export const getEmployeeById = async (id: string): Promise<Employee | null> => {
+    const { data, error } = await supabase.from('employees').select('*').eq('id', id).single();
+    if (error) handleApiError(error, `fetch employee ${id}`);
+    return data ? {...data, recurringAllowances: (data.recurring_allowances as any) || [], recurringDeductions: (data.recurring_deductions as any) || []} : null;
+};
+export const addEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<Employee> => {
+    const { data, error } = await supabase.from('employees').insert([employeeData]).select().single();
+    if (error) handleApiError(error, 'add employee');
+    return data;
+};
+export const addBulkEmployees = async (employees: Database['public']['Tables']['employees']['Insert'][]): Promise<void> => {
+    const { error } = await supabase.from('employees').insert(employees);
+    if (error) handleApiError(error, 'bulk add employees');
+};
+export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
+    const { id, ...updateData } = updatedEmployee;
+    const { data, error } = await supabase.from('employees').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update employee ${id}`);
+    return data;
+};
+export const deleteEmployee = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('employees').delete().eq('id', id);
+    if (error) handleApiError(error, `delete employee ${id}`);
+};
+export const getAllEmployees = getEmployees;
 
 // Time Logs
-export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]> => { await mockDelay(); return []; };
-export const addTimeLog = async (logData: Omit<TimeLog, 'id'>): Promise<TimeLog> => { await mockDelay(); return { ...logData, id: `mock-log-${Date.now()}` }; };
+export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
+    const { data, error } = await supabase.from('time_logs').select('*').eq('employee_id', employeeId).order('clock_in', { ascending: false });
+    if (error) handleApiError(error, `fetch time logs for employee ${employeeId}`);
+    return data || [];
+};
+export const addTimeLog = async (logData: Omit<TimeLog, 'id'>): Promise<TimeLog> => {
+    const { data, error } = await supabase.from('time_logs').insert([logData]).select().single();
+    if (error) handleApiError(error, 'add time log');
+    return data;
+};
 
 // Inventory
-export const getAllInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => { await mockDelay(); return []; };
-export const getInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => { await mockDelay(); return []; };
-export const getStockTransactions = async (): Promise<StockTransaction[]> => { await mockDelay(); return []; };
-export const getInventoryItemTransactions = async (itemId: string): Promise<StockTransaction[]> => { await mockDelay(); return []; };
-export const addInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'lastUpdated'>): Promise<InventoryItem> => { await mockDelay(); return { ...itemData, id: `mock-item-${Date.now()}`, lastUpdated: new Date().toISOString() }; };
-export const addBulkInventoryItems = async (items: any[]): Promise<void> => { await mockDelay(); return; };
-export const updateInventoryItem = async (updatedItem: InventoryItem): Promise<InventoryItem> => { await mockDelay(); return updatedItem; };
-export const deleteInventoryItem = (id: string) => { mockDelay(); return; };
-export const addStockTransaction = async (transactionData: Omit<StockTransaction, 'id' | 'date'>) => { await mockDelay(); return; };
+export const getInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
+    let query = supabase.from('inventory_items').select('*');
+    if (category) {
+        query = query.eq('category', category);
+    }
+    const { data, error } = await query.order('name', { ascending: true });
+    if (error) handleApiError(error, `fetch inventory items (category: ${category})`);
+    return data || [];
+};
+export const getStockTransactions = async (): Promise<StockTransaction[]> => {
+    const { data, error } = await supabase.from('stock_transactions').select('*').order('date', { ascending: false });
+    if (error) handleApiError(error, 'fetch all stock transactions');
+    return data || [];
+};
+export const getInventoryItemTransactions = async (itemId: string): Promise<StockTransaction[]> => {
+    const { data, error } = await supabase.from('stock_transactions').select('*').eq('item_id', itemId).order('date', { ascending: false });
+    if (error) handleApiError(error, `fetch transactions for item ${itemId}`);
+    return data || [];
+};
+export const addInventoryItem = async (itemData: Omit<InventoryItem, 'id' | 'lastUpdated'>): Promise<InventoryItem> => {
+    const { data, error } = await supabase.from('inventory_items').insert([itemData]).select().single();
+    if (error) handleApiError(error, 'add inventory item');
+    return data;
+};
+export const updateInventoryItem = async (updatedItem: InventoryItem): Promise<InventoryItem> => {
+    const { id, lastUpdated, ...updateData } = updatedItem;
+    const { data, error } = await supabase.from('inventory_items').update({ ...updateData, last_updated: new Date().toISOString() }).eq('id', id).select().single();
+    if (error) handleApiError(error, `update inventory item ${id}`);
+    return data;
+};
+export const deleteInventoryItem = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('inventory_items').delete().eq('id', id);
+    if (error) handleApiError(error, `delete inventory item ${id}`);
+};
+export const addStockTransaction = async (transactionData: Omit<StockTransaction, 'id' | 'date'>): Promise<StockTransaction> => {
+    const { data, error } = await supabase.from('stock_transactions').insert([{ ...transactionData, date: new Date().toISOString() }]).select().single();
+    if (error) handleApiError(error, 'add stock transaction');
+    
+    // Also update inventory item quantity
+    const { error: updateError } = await supabase.rpc('add_stock_transaction', {
+      p_item_id: transactionData.itemId,
+      p_item_name: transactionData.itemName,
+      p_type: transactionData.type,
+      p_quantity: transactionData.quantity,
+      p_reason: transactionData.reason,
+      p_employee_id: transactionData.employeeId,
+      p_employee_name: transactionData.employeeName,
+    });
+    if (updateError) handleApiError(updateError, `update inventory quantity for item ${transactionData.itemId}`);
+
+    return data;
+};
 
 // Purchase Orders
-export const getAllPurchaseOrders = async (): Promise<PurchaseOrder[]> => { await mockDelay(); return []; };
-export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => { await mockDelay(); return []; };
-export const addPurchaseOrder = async (poData: Omit<PurchaseOrder, 'id'>): Promise<PurchaseOrder> => { await mockDelay(); return { ...poData, id: `mock-po-${Date.now()}` }; };
-export const addBulkPurchaseOrders = async (pos: any[]): Promise<void> => { await mockDelay(); return; };
-export const updatePurchaseOrder = async (po: PurchaseOrder): Promise<PurchaseOrder> => { await mockDelay(); return po; };
-export const deletePurchaseOrder = (id: string) => { mockDelay(); return; };
+export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
+    const { data, error } = await supabase.from('purchase_orders').select('*').order('order_date', { ascending: false });
+    if (error) handleApiError(error, 'fetch purchase orders');
+    return data || [];
+};
+export const addPurchaseOrder = async (poData: Omit<PurchaseOrder, 'id'>): Promise<PurchaseOrder> => {
+    const { data, error } = await supabase.from('purchase_orders').insert([poData]).select().single();
+    if (error) handleApiError(error, 'add purchase order');
+    return data;
+};
+export const updatePurchaseOrder = async (po: PurchaseOrder): Promise<PurchaseOrder> => {
+    const { id, ...updateData } = po;
+    const { data, error } = await supabase.from('purchase_orders').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update purchase order ${id}`);
+    return data;
+};
+export const deletePurchaseOrder = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('purchase_orders').delete().eq('id', id);
+    if (error) handleApiError(error, `delete purchase order ${id}`);
+};
+export const getAllPurchaseOrders = getPurchaseOrders;
 
 // Documents
-export const getDocuments = async (): Promise<Document[]> => { await mockDelay(); return []; };
-export const addDocument = async (doc: Omit<Document, 'id'>): Promise<Document> => { await mockDelay(); return { ...doc, id: `mock-doc-${Date.now()}` }; };
-export const addBulkDocuments = async (docs: any[]): Promise<void> => { await mockDelay(); return; };
-export const updateDocument = async (doc: Document): Promise<Document> => { await mockDelay(); return doc; };
-export const deleteDocument = (id: string) => { mockDelay(); return; };
+export const getDocuments = async (): Promise<Document[]> => {
+    const { data, error } = await supabase.from('documents').select('*').order('date', { ascending: false });
+    if (error) handleApiError(error, 'fetch documents');
+    return data || [];
+};
+export const addDocument = async (doc: Omit<Document, 'id'>): Promise<Document> => {
+    const { data, error } = await supabase.from('documents').insert([doc]).select().single();
+    if (error) handleApiError(error, 'add document');
+    return data;
+};
+export const updateDocument = async (doc: Document): Promise<Document> => {
+    const { id, ...updateData } = doc;
+    const { data, error } = await supabase.from('documents').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update document ${id}`);
+    return data;
+};
+export const deleteDocument = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('documents').delete().eq('id', id);
+    if (error) handleApiError(error, `delete document ${id}`);
+};
 
 // Chat
-export const getChatMessages = async (roomId: string): Promise<ChatMessage[]> => { await mockDelay(); return []; };
-export const addChatMessage = async (msg: Omit<ChatMessage, 'id'>): Promise<ChatMessage> => { await mockDelay(); return { ...msg, id: `mock-chat-${Date.now()}` }; };
+export const getChatMessages = async (roomId: string): Promise<ChatMessage[]> => {
+    const { data, error } = await supabase.from('chat_messages').select('*').eq('room_id', roomId).order('timestamp', { ascending: true });
+    if (error) handleApiError(error, `fetch chat messages for room ${roomId}`);
+    return data || [];
+};
+export const addChatMessage = async (msg: Omit<ChatMessage, 'id'>): Promise<ChatMessage> => {
+    const { data, error } = await supabase.from('chat_messages').insert([msg]).select().single();
+    if (error) handleApiError(error, 'add chat message');
+    return data;
+};
 
 // Calendar Events
-export const getCalendarEvents = async (): Promise<CalendarEvent[]> => { await mockDelay(); return []; };
-export const addCalendarEvent = async (event: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> => { await mockDelay(); return { ...event, id: `mock-event-${Date.now()}` }; };
-export const updateCalendarEvent = async (event: CalendarEvent): Promise<CalendarEvent> => { await mockDelay(); return event; };
-export const deleteCalendarEvent = (id: string) => { mockDelay(); return; };
+export const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
+    const { data, error } = await supabase.from('calendar_events').select('*').order('start', { ascending: true });
+    if (error) handleApiError(error, 'fetch calendar events');
+    return data || [];
+};
+export const addCalendarEvent = async (event: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent> => {
+    const { data, error } = await supabase.from('calendar_events').insert([event]).select().single();
+    if (error) handleApiError(error, 'add calendar event');
+    return data;
+};
+export const updateCalendarEvent = async (event: CalendarEvent): Promise<CalendarEvent> => {
+    const { id, ...updateData } = event;
+    const { data, error } = await supabase.from('calendar_events').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update calendar event ${id}`);
+    return data;
+};
+export const deleteCalendarEvent = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('calendar_events').delete().eq('id', id);
+    if (error) handleApiError(error, `delete calendar event ${id}`);
+};
 
 // Leave Requests
-export const getAllLeaveRequests = async (): Promise<LeaveRequest[]> => { await mockDelay(); return []; };
-export const getLeaveRequests = async (): Promise<LeaveRequest[]> => { await mockDelay(); return []; };
-export const addLeaveRequest = async (req: Omit<LeaveRequest, 'id'>): Promise<LeaveRequest> => { await mockDelay(); return { ...req, id: `mock-leave-${Date.now()}` }; };
-export const addBulkLeaveRequests = async (reqs: any[]): Promise<void> => { await mockDelay(); return; };
-export const updateLeaveRequest = async (req: LeaveRequest): Promise<LeaveRequest> => { await mockDelay(); return req; };
-export const deleteLeaveRequest = (id: string) => { mockDelay(); return; };
+export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
+    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false });
+    if (error) handleApiError(error, 'fetch leave requests');
+    return data || [];
+};
+export const addLeaveRequest = async (req: Omit<LeaveRequest, 'id'>): Promise<LeaveRequest> => {
+    const { data, error } = await supabase.from('leave_requests').insert([req]).select().single();
+    if (error) handleApiError(error, 'add leave request');
+    return data;
+};
+export const updateLeaveRequest = async (req: LeaveRequest): Promise<LeaveRequest> => {
+    const { id, ...updateData } = req;
+    const { data, error } = await supabase.from('leave_requests').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update leave request ${id}`);
+    return data;
+};
+export const deleteLeaveRequest = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('leave_requests').delete().eq('id', id);
+    if (error) handleApiError(error, `delete leave request ${id}`);
+};
+export const getAllLeaveRequests = getLeaveRequests;
+
 
 // Cash Advance
-export const getCashAdvanceRequests = async (): Promise<CashAdvanceRequest[]> => { await mockDelay(); return []; };
-export const addCashAdvanceRequest = async (req: Omit<CashAdvanceRequest, 'id'>): Promise<CashAdvanceRequest> => { await mockDelay(); return { ...req, id: `mock-ca-${Date.now()}` }; };
-export const addBulkCashAdvanceRequests = async (reqs: any[]): Promise<void> => { await mockDelay(); return; };
-export const updateCashAdvanceRequest = async (req: CashAdvanceRequest): Promise<CashAdvanceRequest> => { await mockDelay(); return req; };
-export const deleteCashAdvanceRequest = (id: string) => { mockDelay(); return; };
+export const getCashAdvanceRequests = async (): Promise<CashAdvanceRequest[]> => {
+    const { data, error } = await supabase.from('cash_advance_requests').select('*').order('request_date', { ascending: false });
+    if (error) handleApiError(error, 'fetch cash advance requests');
+    return data || [];
+};
+export const addCashAdvanceRequest = async (req: Omit<CashAdvanceRequest, 'id'>): Promise<CashAdvanceRequest> => {
+    const { data, error } = await supabase.from('cash_advance_requests').insert([req]).select().single();
+    if (error) handleApiError(error, 'add cash advance request');
+    return data;
+};
+export const updateCashAdvanceRequest = async (req: CashAdvanceRequest): Promise<CashAdvanceRequest> => {
+    const { id, ...updateData } = req;
+    const { data, error } = await supabase.from('cash_advance_requests').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update cash advance request ${id}`);
+    return data;
+};
+export const deleteCashAdvanceRequest = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('cash_advance_requests').delete().eq('id', id);
+    if (error) handleApiError(error, `delete cash advance request ${id}`);
+};
 
 // Payroll
-export const getPayrollComponents = async (): Promise<PayrollComponent[]> => { await mockDelay(); return DEFAULT_PAYROLL_COMPONENTS; };
-export const addPayrollComponent = async (comp: Omit<PayrollComponent, 'id'>): Promise<PayrollComponent> => { await mockDelay(); return { ...comp, id: `mock-comp-${Date.now()}` }; };
-export const updatePayrollComponent = async (comp: PayrollComponent): Promise<PayrollComponent> => { await mockDelay(); return comp; };
-export const deletePayrollComponent = (id: string) => { mockDelay(); return; };
+export const getPayrollComponents = async (): Promise<PayrollComponent[]> => {
+    const { data, error } = await supabase.from('payroll_components').select('*');
+    if (error) handleApiError(error, 'fetch payroll components');
+    return data || [];
+};
+export const addPayrollComponent = async (comp: Omit<PayrollComponent, 'id'>): Promise<PayrollComponent> => {
+    const { data, error } = await supabase.from('payroll_components').insert([comp]).select().single();
+    if (error) handleApiError(error, 'add payroll component');
+    return data;
+};
+export const updatePayrollComponent = async (comp: PayrollComponent): Promise<PayrollComponent> => {
+    const { id, ...updateData } = comp;
+    const { data, error } = await supabase.from('payroll_components').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update payroll component ${id}`);
+    return data;
+};
+export const deletePayrollComponent = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('payroll_components').delete().eq('id', id);
+    if (error) handleApiError(error, `delete payroll component ${id}`);
+};
 export const getAllPayrollComponents = getPayrollComponents;
-export const getPayrollRuns = async (): Promise<PayrollRun[]> => { await mockDelay(); return []; };
-export const getPayrollRunById = async (id: string): Promise<PayrollRun | null> => { await mockDelay(); return null; };
-export const addPayrollRun = async (run: Omit<PayrollRun, 'id'>): Promise<PayrollRun> => { await mockDelay(); return { ...run, id: `mock-run-${Date.now()}` }; };
-export const updatePayrollRun = async (run: PayrollRun): Promise<PayrollRun> => { await mockDelay(); return run; };
-export const deletePayrollRun = async (id: string) => { await mockDelay(); return; };
-export const getPayslipsForRun = async (runId: string): Promise<Payslip[]> => { await mockDelay(); return []; };
-export const getPayslipsForEmployee = async (employeeId: string): Promise<Payslip[]> => { await mockDelay(); return []; };
-export const addPayslip = async (payslip: Payslip) => { await mockDelay(); return; };
-export const updatePayslip = async (payslip: Payslip) => { await mockDelay(); return; };
-export const deletePayslip = (id: string) => { mockDelay(); return; };
+
+export const getPayrollRuns = async (): Promise<PayrollRun[]> => {
+    const { data, error } = await supabase.from('payroll_runs').select('*').order('date_created', { ascending: false });
+    if (error) handleApiError(error, 'fetch payroll runs');
+    return data || [];
+};
+export const getPayrollRunById = async (id: string): Promise<PayrollRun | null> => {
+    const { data, error } = await supabase.from('payroll_runs').select('*').eq('id', id).single();
+    if (error) {
+        // Don't throw if not found, just return null
+        if (error.code === 'PGRST116') return null; 
+        handleApiError(error, `fetch payroll run ${id}`);
+    }
+    return data;
+};
+export const addPayrollRun = async (run: Omit<PayrollRun, 'id'>): Promise<PayrollRun> => {
+    const { data, error } = await supabase.from('payroll_runs').insert([run]).select().single();
+    if (error) handleApiError(error, 'add payroll run');
+    return data;
+};
+export const updatePayrollRun = async (run: Partial<PayrollRun> & {id: string}): Promise<PayrollRun> => {
+    const { id, ...updateData } = run;
+    const { data, error } = await supabase.from('payroll_runs').update(updateData).eq('id', id).select().single();
+    if (error) handleApiError(error, `update payroll run ${id}`);
+    return data;
+};
+export const deletePayrollRun = async (id: string): Promise<void> => {
+    const { error } = await supabase.rpc('delete_payroll_run', { p_run_id: id });
+    if (error) handleApiError(error, `delete payroll run ${id}`);
+};
+export const getPayslipsForRun = async (runId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('payroll_run_id', runId);
+    if (error) handleApiError(error, `fetch payslips for run ${runId}`);
+    return (data || []).map(p => ({...p, allowances: (p.allowances as any) || [], otherDeductions: (p.other_deductions as any) || []}));
+};
+export const getPayslipsForEmployee = async (employeeId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('employee_id', employeeId).order('pay_period', { ascending: false });
+    if (error) handleApiError(error, `fetch payslips for employee ${employeeId}`);
+    return (data || []).map(p => ({...p, allowances: (p.allowances as any) || [], otherDeductions: (p.other_deductions as any) || []}));
+};
+export const addPayslip = async (payslip: Payslip): Promise<void> => {
+    const { error } = await supabase.from('payslips').insert([payslip]);
+    if (error) handleApiError(error, 'add payslip');
+};
+export const updatePayslip = async (payslip: Payslip): Promise<void> => {
+    const { id, ...updateData } = payslip;
+    const { error } = await supabase.from('payslips').update(updateData).eq('id', id);
+    if (error) handleApiError(error, `update payslip ${id}`);
+};
+export const deletePayslip = async (id: string): Promise<void> => {
+    const { error } = await supabase.from('payslips').delete().eq('id', id);
+    if (error) handleApiError(error, `delete payslip ${id}`);
+};
 
 // Settings
 export const getSetting = async (key: string): Promise<any | null> => {
-    await mockDelay();
-    if (key === 'global_announcement') return Promise.resolve('ยินดีต้อนรับ! นี่คือโหมดทดลองของแอปพลิเคชัน');
-    return Promise.resolve(null);
-};
-export const saveSetting = async (key: string, value: any): Promise<void> => { await mockDelay(); return; };
-
-// User Management
-export const getManagedUsers = async (): Promise<ManagedUser[]> => { await mockDelay(); return MOCK_MANAGED_USERS; };
-export const updateUserRole = async (userId: string, role: UserRole): Promise<ManagedUser> => {
-    await mockDelay();
-    const user = MOCK_MANAGED_USERS.find(u => u.id === userId);
-    if(user) {
-        return { ...user, role };
+    const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found, which is fine
+      handleApiError(error, `get setting ${key}`);
     }
-    throw new Error('User not found in mock data');
+    return data ? data.value : null;
+};
+export const saveSetting = async (key: string, value: any): Promise<void> => {
+    const { error } = await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
+    if (error) handleApiError(error, `save setting ${key}`);
+};
+
+// User Management (Admin)
+export const getManagedUsers = async (): Promise<ManagedUser[]> => {
+    const { data, error } = await supabase.rpc('get_all_users');
+    if (error) handleApiError(error, 'get managed users via RPC');
+    return data || [];
+};
+
+export const updateUserRole = async (userId: string, role: UserRole): Promise<void> => {
+    const { error } = await supabase.rpc('update_user_role', { user_id_to_update: userId, new_role: role });
+    if (error) handleApiError(error, `update role for user ${userId} via RPC`);
 };

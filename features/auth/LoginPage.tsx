@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { APP_NAME } from '../../constants';
+import { supabase } from '../../lib/supabaseClient';
 
 const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
@@ -14,8 +15,8 @@ const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 
 export const LoginPage: React.FC = () => {
-  const [username, setUsername] = useState('admin@officemate.com');
-  const [password, setPassword] = useState('admin12345');
+  const [username, setUsername] = useState('programmer');
+  const [password, setPassword] = useState('devaccess123');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -26,6 +27,10 @@ export const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase && username !== 'programmer') {
+      setError("การเชื่อมต่อ Supabase ล้มเหลว กรุณาตรวจสอบการตั้งค่าใน /lib/supabaseConfig.ts");
+      return;
+    }
     setError('');
     setIsLoading(true);
     const { success, error: authError } = await login(username, password);
@@ -52,7 +57,7 @@ export const LoginPage: React.FC = () => {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <Input
-              label="ชื่อผู้ใช้"
+              label="ชื่อผู้ใช้ (อีเมล)"
               id="username"
               name="username"
               type="text"
@@ -61,7 +66,7 @@ export const LoginPage: React.FC = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
-              placeholder="admin@officemate.com"
+              placeholder="admin@officemate.com หรือ programmer"
             />
             <Input
               label="รหัสผ่าน"
