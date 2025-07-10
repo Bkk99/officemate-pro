@@ -1,4 +1,4 @@
-// src/components/Layout.tsx (กลับมาใช้เวอร์ชัน Minimal ที่เคยทำงานได้)
+
 import React, { useState, useEffect } from 'react'; 
 import { NavLink, Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
