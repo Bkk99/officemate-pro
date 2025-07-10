@@ -641,7 +641,6 @@ export interface Database {
           category: string
           created_at?: string
           id?: string
-          last_updated?: string
           min_stock_level: number
           name: string
           quantity: number
@@ -653,7 +652,6 @@ export interface Database {
           category?: string
           created_at?: string
           id?: string
-          last_updated?: string
           min_stock_level?: number
           name?: string
           quantity?: number

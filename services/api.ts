@@ -52,8 +52,13 @@ export const getAllUserProfiles = async (): Promise<User[]> => {
 };
 
 // --- Employees ---
-export const getEmployees = async (): Promise<Employee[]> => {
+export const getAllEmployees = async (): Promise<Employee[]> => {
     const { data, error } = await supabase.from('employees').select('*');
+    const rows = handleSupabaseError({ data, error }, 'getAllEmployees') || [];
+    return rows.map(mapEmployeeFromDb);
+};
+export const getEmployees = async (): Promise<Employee[]> => {
+    const { data, error } = await supabase.from('employees').select('*').order('created_at', { ascending: false }).limit(100);
     const rows = handleSupabaseError({ data, error }, 'getEmployees') || [];
     return rows.map(mapEmployeeFromDb);
 };
@@ -145,8 +150,15 @@ export const addTimeLog = async (logData: Omit<TimeLog, 'id'>): Promise<TimeLog>
 };
 
 // --- Inventory ---
-export const getInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
+export const getAllInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
     let query = supabase.from('inventory_items').select('*');
+    if (category) { (category === 'General') ? query = query.not('category', 'eq', 'อุปกรณ์ IT') : query = query.eq('category', category); }
+    const { data, error } = await query;
+    const rows = handleSupabaseError({ data, error }, 'getAllInventoryItems') || [];
+    return rows.map((r: InventoryItemRow) => ({ id: r.id, name: r.name, sku: r.sku, category: r.category, quantity: r.quantity, minStockLevel: r.min_stock_level, unitPrice: r.unit_price, supplier: r.supplier || undefined, lastUpdated: r.last_updated, isLowStock: r.quantity < r.min_stock_level }));
+};
+export const getInventoryItems = async (category?: 'อุปกรณ์ IT' | 'General'): Promise<InventoryItem[]> => {
+    let query = supabase.from('inventory_items').select('*').order('last_updated', { ascending: false }).limit(100);
     if (category) { (category === 'General') ? query = query.not('category', 'eq', 'อุปกรณ์ IT') : query = query.eq('category', category); }
     const { data, error } = await query;
     const rows = handleSupabaseError({ data, error }, 'getInventoryItems') || [];
@@ -184,8 +196,13 @@ export const addStockTransaction = async (transactionData: Omit<StockTransaction
 // --- Purchase Orders ---
 const mapPoFromDb = (r: PurchaseOrderRow): PurchaseOrder => ({ id: r.id, poNumber: r.po_number, supplier: r.supplier, items: (r.items as unknown as any[]) || [], totalAmount: r.total_amount, status: r.status as POStatusKey, orderDate: r.order_date, expectedDeliveryDate: r.expected_delivery_date || undefined, notes: r.notes || undefined });
 
-export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
+export const getAllPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
     const { data, error } = await supabase.from('purchase_orders').select('*');
+    const rows = handleSupabaseError({ data, error }, 'getAllPurchaseOrders') || [];
+    return rows.map(mapPoFromDb);
+};
+export const getPurchaseOrders = async (): Promise<PurchaseOrder[]> => {
+    const { data, error } = await supabase.from('purchase_orders').select('*').order('order_date', { ascending: false }).limit(100);
     const rows = handleSupabaseError({ data, error }, 'getPurchaseOrders') || [];
     return rows.map(mapPoFromDb);
 };
@@ -207,7 +224,7 @@ export const deletePurchaseOrder = (id: string) => supabase.from('purchase_order
 const mapDocFromDb = (r: DocumentRow): Document => ({ id: r.id, docNumber: r.doc_number, type: r.type as DocumentType, clientName: r.client_name, projectName: r.project_name || undefined, date: r.date, amount: r.amount || undefined, status: r.status as DocumentStatusKey, pdfUrl: r.pdf_url || undefined });
 
 export const getDocuments = async (): Promise<Document[]> => {
-    const { data, error } = await supabase.from('documents').select('*');
+    const { data, error } = await supabase.from('documents').select('*').order('date', { ascending: false }).limit(100);
     return (handleSupabaseError({ data, error }, 'getDocuments') || []).map(mapDocFromDb);
 };
 export const addDocument = async (doc: Omit<Document, 'id'>): Promise<Document> => {
@@ -257,8 +274,13 @@ export const deleteCalendarEvent = (id: string) => supabase.from('calendar_event
 
 // --- Leave Requests ---
 const mapLeaveFromDb = (r: LeaveRequestRow): LeaveRequest => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, leaveType: r.leave_type as LeaveType, startDate: r.start_date, endDate: r.end_date, reason: r.reason || undefined, status: r.status as LeaveRequestStatus, requestedDate: r.requested_date, approverId: r.approver_id || undefined, approverName: r.approver_name || undefined, approvedDate: r.approved_date || undefined, notes: r.notes || undefined, durationInDays: r.duration_in_days || undefined });
-export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
+
+export const getAllLeaveRequests = async (): Promise<LeaveRequest[]> => {
     const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false });
+    return (handleSupabaseError({data, error}, 'getAllLeaveRequests') || []).map(mapLeaveFromDb);
+};
+export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
+    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false }).limit(100);
     return (handleSupabaseError({data, error}, 'getLeaveRequests') || []).map(mapLeaveFromDb);
 };
 export const addLeaveRequest = async (req: Omit<LeaveRequest, 'id'>): Promise<LeaveRequest> => {
@@ -277,7 +299,7 @@ export const deleteLeaveRequest = (id: string) => supabase.from('leave_requests'
 // --- Cash Advance ---
 const mapCashAdvanceFromDb = (r: CashAdvanceRequestRow): CashAdvanceRequest => ({ id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, employeeCode: r.employee_code || undefined, requestDate: r.request_date, amount: r.amount, reason: r.reason, status: r.status as CashAdvanceRequestStatus, approverId: r.approver_id || undefined, approverName: r.approver_name || undefined, approvalDate: r.approval_date || undefined, notes: r.notes || undefined, paymentDate: r.payment_date || undefined });
 export const getCashAdvanceRequests = async (): Promise<CashAdvanceRequest[]> => {
-    const {data, error} = await supabase.from('cash_advance_requests').select('*').order('request_date', {ascending: false});
+    const {data, error} = await supabase.from('cash_advance_requests').select('*').order('request_date', {ascending: false}).limit(100);
     return (handleSupabaseError({data, error}, 'getCashAdvanceRequests') || []).map(mapCashAdvanceFromDb);
 };
 export const addCashAdvanceRequest = async (req: Omit<CashAdvanceRequest, 'id'>): Promise<CashAdvanceRequest> => {
@@ -315,7 +337,7 @@ export const getAllPayrollComponents = getPayrollComponents; // Alias
 
 const mapPayrollRunFromDb = (r: PayrollRunRow): PayrollRun => ({ id: r.id, periodMonth: r.period_month, periodYear: r.period_year, status: r.status as any, dateCreated: r.date_created, dateApproved: r.date_approved || undefined, datePaid: r.date_paid || undefined, payslipIds: r.payslip_ids || [], totalEmployees: r.total_employees, totalGrossPay: r.total_gross_pay, totalDeductions: r.total_deductions, totalNetPay: r.total_net_pay, notes: r.notes || undefined });
 export const getPayrollRuns = async (): Promise<PayrollRun[]> => {
-    const {data, error} = await supabase.from('payroll_runs').select('*').order('date_created', {ascending: false});
+    const {data, error} = await supabase.from('payroll_runs').select('*').order('date_created', {ascending: false}).limit(50);
     return (handleSupabaseError({data, error}, 'getPayrollRuns') || []).map(mapPayrollRunFromDb);
 };
 export const getPayrollRunById = async (id: string): Promise<PayrollRun | null> => {
