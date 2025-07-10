@@ -15,7 +15,7 @@ const LoginIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 
 export const LoginPage: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +33,7 @@ export const LoginPage: React.FC = () => {
     }
     setError('');
     setIsLoading(true);
-    const { success, error: authError } = await login(email, password);
+    const { success, error: authError } = await login(username, password);
     setIsLoading(false);
     if (success) {
       navigate(from, { replace: true });
@@ -57,16 +57,16 @@ export const LoginPage: React.FC = () => {
         <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <Input
-              label="อีเมล"
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
+              label="ชื่อผู้ใช้"
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
-              placeholder="admin@example.com"
+              placeholder="admin@officemate.com"
             />
             <Input
               label="รหัสผ่าน"

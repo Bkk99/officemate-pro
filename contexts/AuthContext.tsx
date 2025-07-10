@@ -1,11 +1,11 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { User, UserRole } from '../types';
+import { User, UserRole, Database } from '../types';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password_DUMMY: string) => Promise<{ success: boolean; error: string | null }>;
+  login: (username: string, password: string) => Promise<{ success: boolean; error: string | null }>;
   logout: () => void;
   isLoading: boolean;
   updateUserContext: (updatedUser: User) => void;
@@ -17,46 +17,75 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchAndSetUserProfile = useCallback(async (session: Session | null) => {
+  // This function now returns a boolean indicating if a profile was successfully loaded.
+  const fetchAndSetUserProfile = useCallback(async (session: Session | null): Promise<boolean> => {
     if (session?.user) {
         const authUser = session.user;
         
-        // **Query the profiles table for the latest user data.**
-        // This ensures that any changes made directly in the database (like changing a role)
-        // are immediately reflected in the app upon login or refresh.
         const { data: profile, error } = await supabase!
             .from('profiles')
             .select('full_name, role, department')
             .eq('id', authUser.id)
             .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which is an error state for a logged in user
+        if (error && error.code !== 'PGRST116') { // PGRST116 means no rows found, which we handle
             console.error("Error fetching user profile:", error.message);
-            // If we can't fetch the profile, log out the user to prevent inconsistent state
             if (supabase) await supabase.auth.signOut(); 
             setUser(null);
-        } else if (profile) {
+            setIsLoading(false);
+            return false;
+        } else if (profile) { // Profile found, normal flow
             setUser({
                 id: authUser.id,
                 username: authUser.email || '',
-                // Use data from the 'profiles' table, with fallbacks.
                 role: profile.role as UserRole || UserRole.STAFF, 
                 name: profile.full_name || authUser.email || 'User',
                 department: profile.department || undefined,
             });
-        } else {
-             // This case means a user is authenticated but has no profile. 
-             // This shouldn't happen with the database trigger in place.
-             // We can log them out to be safe.
-             console.error(`User ${authUser.id} is authenticated but has no profile. Logging out.`);
-             if (supabase) await supabase.auth.signOut();
-             setUser(null);
-        }
+            setIsLoading(false);
+            return true;
+        } else { // Profile NOT found, attempt to create it (self-healing mechanism)
+             console.warn(`Profile for user ${authUser.id} not found. Attempting to create one.`);
+             
+             const newProfileData: Database['public']['Tables']['profiles']['Insert'] = {
+                id: authUser.id,
+                full_name: authUser.user_metadata?.full_name || authUser.email,
+                username: authUser.email,
+                role: (authUser.user_metadata?.role as UserRole) || UserRole.STAFF,
+                department: authUser.user_metadata?.department || null
+            };
 
+            const { data: createdProfile, error: createError } = await supabase
+                .from('profiles')
+                .insert(newProfileData)
+                .select()
+                .single();
+            
+            if (createError) {
+                console.error(`Failed to create profile for user ${authUser.id}:`, createError.message);
+                if (supabase) await supabase.auth.signOut();
+                setUser(null);
+                setIsLoading(false);
+                return false;
+            }
+            
+            // If profile creation is successful, set the user and return true
+            console.log(`Successfully created profile for user ${authUser.id}.`);
+            setUser({
+                id: authUser.id,
+                username: authUser.email || '',
+                role: createdProfile.role as UserRole || UserRole.STAFF,
+                name: createdProfile.full_name || authUser.email || 'User',
+                department: createdProfile.department || undefined,
+            });
+            setIsLoading(false);
+            return true;
+        }
     } else {
         setUser(null);
+        setIsLoading(false);
+        return false;
     }
-    setIsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -75,7 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!supabase) return;
     
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
-        setIsLoading(true);
         await fetchAndSetUserProfile(session);
     });
 
@@ -84,24 +112,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [fetchAndSetUserProfile]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
     setIsLoading(true);
     
-    // Use the password from the form directly.
-    const { error } = await supabase.auth.signInWithPassword({
-        email: email,
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: username,
         password: password,
     });
-    
-    setIsLoading(false);
 
-    if (error) {
-        console.error("Supabase login error:", error.message);
+    // Handle admin auto-signup
+    if (signInError && signInError.message === 'Invalid login credentials' && username === 'admin@officemate.com') {
+        console.log('Admin login failed, attempting to create admin user...');
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: username,
+            password: password,
+            options: {
+                data: {
+                    full_name: 'แอดมิน Officemate',
+                    role: UserRole.ADMIN,
+                    department: 'บริหาร',
+                    username: username
+                }
+            }
+        });
+        
+        if (signUpError) {
+            setIsLoading(false);
+            console.error("Supabase admin signup error:", signUpError.message);
+            if (signUpError.message.includes('User already registered')) {
+                 return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+            }
+            return { success: false, error: `เกิดข้อผิดพลาดในการสร้างบัญชีแอดมิน: ${signUpError.message}` };
+        }
+        
+        if (signUpData.session) {
+            const profileSuccess = await fetchAndSetUserProfile(signUpData.session);
+            if (profileSuccess) {
+                return { success: true, error: null };
+            } else {
+                return { success: false, error: "สร้างบัญชีแอดมินสำเร็จ แต่ไม่สามารถโหลดโปรไฟล์ได้" };
+            }
+        } else {
+             setIsLoading(false);
+             return { success: false, error: "สร้างบัญชีสำเร็จแล้ว กรุณายืนยันอีเมลของคุณ" };
+        }
+    }
+    
+    if (signInError) {
+        setIsLoading(false);
+        console.error("Supabase login error:", signInError.message);
         return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
     }
-    return { success: true, error: null };
-  }, []);
+
+    if (signInData.session) {
+        const profileSuccess = await fetchAndSetUserProfile(signInData.session);
+        if (profileSuccess) {
+            return { success: true, error: null };
+        } else {
+            return { success: false, error: "เข้าสู่ระบบสำเร็จ แต่ไม่พบข้อมูลโปรไฟล์ผู้ใช้" };
+        }
+    }
+    
+    setIsLoading(false);
+    return { success: false, error: "ไม่สามารถสร้างเซสชันได้" };
+  }, [fetchAndSetUserProfile]);
 
   const logout = useCallback(async () => {
     if (!supabase) return;
@@ -113,10 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   const updateUserContext = useCallback(async (updatedUserData: User) => {
      if (user && user.id === updatedUserData.id) {
-        // Just update local state for immediate feedback
         setUser(updatedUserData);
-        // A more robust solution might refetch the profile from DB
-        // await fetchAndSetUserProfile(await supabase.auth.getSession().data.session);
     }
   }, [user]);
 
