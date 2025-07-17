@@ -1,9 +1,8 @@
 
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { InventoryItem, StockTransaction, UserRole } from '../../types';
-import { getInventoryItems, getStockTransactions, addInventoryItem, updateInventoryItem, deleteInventoryItem, addStockTransaction, getInventoryItemTransactions } from '../../services/api';
+import { addInventoryItem, updateInventoryItem, deleteInventoryItem, addStockTransaction, getInventoryItemTransactions, getInventoryItems, getStockTransactions } from '../../services/api';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
@@ -155,7 +154,10 @@ const ItInventoryPage: React.FC = () => {
         if (editingItemId) {
             await updateInventoryItem(currentItem as InventoryItem);
         } else {
-            await addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>);
+            await addInventoryItem({
+                ...(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>),
+                lastUpdated: new Date().toISOString()
+            });
         }
         await fetchInventory();
         handleCloseItemModal();
@@ -195,6 +197,7 @@ const ItInventoryPage: React.FC = () => {
     try {
         await addStockTransaction({
             ...stockTransaction,
+            date: new Date().toISOString(),
             employeeId: user.id,
             employeeName: user.name,
         });
@@ -225,6 +228,7 @@ const ItInventoryPage: React.FC = () => {
 
   const handleExportInventory = () => {
     if (user?.role === UserRole.STAFF) return; // Staff cannot export CSV
+    
     const headerMapping = {
         sku: 'รหัสสินค้า (SKU)',
         name: 'ชื่อสินค้า',
@@ -234,6 +238,7 @@ const ItInventoryPage: React.FC = () => {
         supplier: 'ซัพพลายเออร์',
         lastUpdated: 'อัปเดตล่าสุด',
     };
+
     const dataToExport = inventory.map(item => ({
         sku: item.sku,
         name: item.name,
@@ -245,7 +250,7 @@ const ItInventoryPage: React.FC = () => {
     }));
     exportToCsv('it_inventory_data', dataToExport, headerMapping);
   };
-
+  
   const handleExportTransactions = () => {
     const dataToExport = allTransactions
       .filter(t => (activeTab === 'in' ? t.type === 'IN' : t.type === 'OUT'))
@@ -275,6 +280,7 @@ const ItInventoryPage: React.FC = () => {
     const filename = `it_stock_transactions_${activeTab}_${new Date().toISOString().split('T')[0]}`;
     exportToCsv(filename, dataToExport, headerMapping);
   };
+
 
   const inventoryColumns: TableColumn<InventoryItem>[] = [
     { header: 'รหัสสินค้า (SKU)', accessor: 'sku' },
@@ -362,7 +368,7 @@ const ItInventoryPage: React.FC = () => {
         actions={
             <div className="flex space-x-2">
                 {user?.role !== UserRole.STAFF && <Button onClick={handleExportInventory} variant="secondary" leftIcon={<ArrowDownTrayIconExport className="h-5 w-5"/>}>ส่งออก CSV</Button>}
-                {user?.role !== UserRole.STAFF && <Button onClick={() => handleOpenItemModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มสินค้า</Button>}
+                {user?.role !== UserRole.STAFF && <Button onClick={() => handleOpenItemModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มสินค้า IT</Button>}
             </div>
         }
       >
@@ -416,11 +422,11 @@ const ItInventoryPage: React.FC = () => {
       </Card>
 
       {user?.role !== UserRole.STAFF && isItemModalOpen && (
-        <Modal isOpen={isItemModalOpen} onClose={handleCloseItemModal} title={editingItemId ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้า IT ใหม่'} size="lg">
+        <Modal isOpen={isItemModalOpen} onClose={handleCloseItemModal} title={editingItemId ? 'แก้ไขข้อมูลสินค้า IT' : 'เพิ่มสินค้า IT ใหม่'} size="lg">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input label="ชื่อสินค้า" name="name" value={currentItem.name} onChange={handleItemChange} required />
               <Input label="รหัสสินค้า (SKU)" name="sku" value={currentItem.sku} onChange={handleItemChange} required />
-              <Input label="หมวดหมู่" name="category" value={currentItem.category} onChange={handleItemChange} required disabled />
+              <Input label="หมวดหมู่" name="category" value={currentItem.category} onChange={handleItemChange} disabled />
               <Input label="ซัพพลายเออร์" name="supplier" value={currentItem.supplier || ''} onChange={handleItemChange} />
               <Input label="จำนวนคงเหลือ" name="quantity" type="number" value={currentItem.quantity} onChange={handleItemChange} min="0" required />
               <Input label="ราคาต่อหน่วย (บาท)" name="unitPrice" type="number" value={currentItem.unitPrice} onChange={handleItemChange} step="0.01" min="0" required />

@@ -29,11 +29,7 @@ export const UserManagementPage: React.FC = () => {
       setUsers(managedUsers);
     } catch (err: any) {
       console.error("Failed to fetch users:", err);
-      if (err.message && (err.message.includes('function get_my_claim(text) does not exist') || err.message.includes('permission denied'))) {
-         setError("เกิดข้อผิดพลาดฐานข้อมูล: อาจเกิดจากฟังก์ชัน 'get_my_claim' ไม่มีอยู่ หรือ RLS ไม่ถูกต้อง กรุณารันสคริปต์ 'database.sql' ที่ให้มาใน Supabase SQL Editor เพื่อแก้ไข");
-      } else {
-         setError('ไม่สามารถโหลดข้อมูลผู้ใช้ได้ คุณอาจไม่มีสิทธิ์ที่จำเป็น');
-      }
+      setError('ไม่สามารถโหลดข้อมูลผู้ใช้ได้');
     } finally {
       setIsLoading(false);
     }
@@ -101,8 +97,7 @@ export const UserManagementPage: React.FC = () => {
   return (
     <Card title="จัดการผู้ใช้งานและสิทธิ์">
       <p className="text-sm text-gray-600 mb-4">
-        ที่หน้านี้ คุณสามารถเปลี่ยนแปลงสิทธิ์การใช้งานของผู้ใช้แต่ละคนได้ ผู้ใช้ใหม่ที่ลงทะเบียนจะได้รับสิทธิ์ 'Staff' เป็นค่าเริ่มต้น
-        หากต้องการเพิ่มผู้ใช้ใหม่ กรุณาใช้ระบบเชิญผู้ใช้ (Invite user) ใน Supabase Dashboard ของคุณ
+        ที่หน้านี้ คุณสามารถเปลี่ยนแปลงสิทธิ์การใช้งานของผู้ใช้แต่ละคนได้
       </p>
       <Table columns={columns} data={users} isLoading={isLoading} emptyMessage="ไม่พบข้อมูลผู้ใช้" />
     </Card>

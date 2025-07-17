@@ -155,7 +155,10 @@ export const InventoryPage: React.FC = () => {
         if (editingItemId) {
             await updateInventoryItem(currentItem as InventoryItem);
         } else {
-            await addInventoryItem(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>);
+            await addInventoryItem({
+                ...(currentItem as Omit<InventoryItem, 'id' | 'lastUpdated'>),
+                lastUpdated: new Date().toISOString()
+            });
         }
         await fetchInventory();
         handleCloseItemModal();
@@ -195,6 +198,7 @@ export const InventoryPage: React.FC = () => {
     try {
         await addStockTransaction({
             ...stockTransaction,
+            date: new Date().toISOString(),
             employeeId: user.id,
             employeeName: user.name,
         });

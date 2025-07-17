@@ -1,7 +1,8 @@
 
 import React from 'react';
+import { Spinner } from './Spinner';
 
-export interface TableColumn<T> { // Added export keyword here
+export interface TableColumn<T> {
   header: string;
   accessor: keyof T | ((item: T) => React.ReactNode);
   className?: string;
@@ -68,6 +69,3 @@ export const Table = <T extends object,>(
     </div>
   );
 };
-
-// Basic spinner component for table loading state
-import { Spinner } from './Spinner'; // Assuming Spinner.tsx is in the same folder

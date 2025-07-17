@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { UserRole, Employee, PurchaseOrder, Document, DocumentType, PayrollRunStatus, TaxBracket, PayrollComponent, LeaveType, LeaveRequestStatus, CashAdvanceRequestStatus, EmployeeStatusKey, POStatusKey, DocumentStatusKey } from './types';
 
@@ -71,7 +72,7 @@ const WalletIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 const CogSettingsIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.11v1.093c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.27.96-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.78.93l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.149-.894c-.07-.424-.384-.764-.78-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-.96.27-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.272.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.11v-1.094c0-.55.398-1.019.94-1.11l.894-.149c.424-.07.764-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773c.39-.39.902-.44 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.93l.149-.894z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.11v1.093c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.27.96-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.78.93l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.149-.894c-.07-.424-.384-.764-.78-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-.96.27-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.272.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.11v-1.094c0 .55.398-1.019.94-1.11l.894-.149c.424-.07.764-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773c.39-.39.902-.44 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.93l.149-.894z" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
   </svg>
 );
@@ -123,36 +124,36 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { name: 'แดชบอร์ด', path: '/dashboard', icon: HomeIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'จัดการพนักงาน', path: '/employees', icon: UsersIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
-  { name: 'สร้างบัตรพนักงาน', path: '/employee-cards', icon: CreditCardIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] }, // HR Staff can also access
-  { name: 'จัดการการลา', path: '/leave-management', icon: CalendarUserIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] }, // HR Staff included
+  { name: 'แดชบอร์ด', path: '/dashboard', icon: HomeIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'จัดการพนักงาน', path: '/employees', icon: UsersIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.Programmer] },
+  { name: 'สร้างบัตรพนักงาน', path: '/employee-cards', icon: CreditCardIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'จัดการการลา', path: '/leave-management', icon: CalendarUserIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
   { 
     name: 'จัดการสต็อก', 
     path: '#', 
     icon: ArchiveBoxIcon, 
-    allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF],
+    allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer],
     subItems: [
-        { name: 'สต็อกทั่วไป', path: '/inventory', icon: CubeIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-        { name: 'สต็อก IT', path: '/inventory/it', icon: ComputerDesktopIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
+        { name: 'สต็อกทั่วไป', path: '/inventory', icon: CubeIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+        { name: 'สต็อก IT', path: '/inventory/it', icon: ComputerDesktopIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
     ]
   },
-  { name: 'ใบสั่งซื้อ (PO)', path: '/purchase-orders', icon: ShoppingCartIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
-  { name: 'จัดการเอกสาร', path: '/documents', icon: DocumentTextIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'ระบบบัญชีเงินเดือน', path: '/payroll', icon: BanknotesIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'เบิกเงินล่วงหน้า', path: '/cash-advance', icon: WalletIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'แชทภายในองค์กร', path: '/chat', icon: ChatBubbleLeftRightIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'ปฏิทินองค์กร', path: '/calendar', icon: CalendarDaysIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF] },
-  { name: 'รายงาน', path: '/reports', icon: ChartBarIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER] },
+  { name: 'ใบสั่งซื้อ (PO)', path: '/purchase-orders', icon: ShoppingCartIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.Programmer] },
+  { name: 'จัดการเอกสาร', path: '/documents', icon: DocumentTextIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'ระบบบัญชีเงินเดือน', path: '/payroll', icon: BanknotesIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'เบิกเงินล่วงหน้า', path: '/cash-advance', icon: WalletIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'แชทภายในองค์กร', path: '/chat', icon: ChatBubbleLeftRightIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'ปฏิทินองค์กร', path: '/calendar', icon: CalendarDaysIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.STAFF, UserRole.Programmer] },
+  { name: 'รายงาน', path: '/reports', icon: ChartBarIcon, allowedRoles: [UserRole.ADMIN, UserRole.MANAGER, UserRole.Programmer] },
   { 
     name: 'ตั้งค่าระบบ', 
     path: '#', // Placeholder as it's a parent
     icon: CogIcon, 
-    allowedRoles: [UserRole.ADMIN],
+    allowedRoles: [UserRole.ADMIN, UserRole.Programmer],
     subItems: [
-        { name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: UsersIcon, allowedRoles: [UserRole.ADMIN] },
-        { name: 'ตั้งค่าเงินเดือน', path: '/payroll/settings', icon: CogSettingsIcon, allowedRoles: [UserRole.ADMIN] },
-        { name: 'ตั้งค่าเครื่องสแกนนิ้ว', path: '/admin/fingerprint-scanner', icon: FingerprintIcon, allowedRoles: [UserRole.ADMIN] },
+        { name: 'จัดการผู้ใช้งาน', path: '/admin/users', icon: UsersIcon, allowedRoles: [UserRole.ADMIN, UserRole.Programmer] },
+        { name: 'ตั้งค่าเงินเดือน', path: '/payroll/settings', icon: CogSettingsIcon, allowedRoles: [UserRole.ADMIN, UserRole.Programmer] },
+        { name: 'ตั้งค่าเครื่องสแกนนิ้ว', path: '/admin/fingerprint-scanner', icon: FingerprintIcon, allowedRoles: [UserRole.ADMIN, UserRole.Programmer] },
     ]
   },
 ];

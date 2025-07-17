@@ -48,7 +48,6 @@ export const CalendarPage: React.FC = () => {
         ]);
         setEvents(eventData);
         setEmployees(employeeData);
-        // Use employees list for attendees to prevent DB error from profiles table.
         setAttendeeOptions(employeeData.map(emp => ({
             value: emp.id,
             label: emp.name,

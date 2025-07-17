@@ -1,7 +1,8 @@
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+
+
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { supabase } from '../lib/supabaseClient';
-import { Session, User as AuthUser } from '@supabase/supabase-js';
+import { DEPARTMENTS } from '../constants';
 
 interface AuthContextType {
   user: User | null;
@@ -13,142 +14,66 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Define mock users internally
+const mockUsersWithPasswords = [
+  { id: 'user-admin-01', username: 'admin@officemate.com', password: 'password', name: 'คุณแอดมิน', role: UserRole.ADMIN, department: DEPARTMENTS[7] },
+  { id: 'user-manager-01', username: 'manager@officemate.com', password: 'password', name: 'คุณเมเนเจอร์', role: UserRole.MANAGER, department: DEPARTMENTS[0] },
+  { id: 'user-staff-01', username: 'staff@officemate.com', password: 'password', name: 'คุณสตาฟ', role: UserRole.STAFF, department: DEPARTMENTS[1] },
+  { id: 'user-hr-01', username: 'hr@officemate.com', password: 'password', name: 'คุณเอชอาร์', role: UserRole.STAFF, department: DEPARTMENTS[3] },
+  { id: 'user-programmer-01', username: 'programmer@officemate.com', password: 'password', name: 'โปรแกรมเมอร์', role: UserRole.Programmer, department: DEPARTMENTS[5] },
+];
+
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const fetchAndSetUserProfile = useCallback(async (authUser: AuthUser) => {
+    useEffect(() => {
+        // Check for logged in user in localStorage on initial load
         try {
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', authUser.id)
-              .single();
-      
-            if (error || !profile) {
-              throw error || new Error('Profile not found.');
+            const storedUser = localStorage.getItem('officemate_user');
+            if (storedUser) {
+                setUser(JSON.parse(storedUser));
             }
-
-            const { data: employeeData, error: employeeError } = await supabase
-              .from('employees')
-              .select('department')
-              .eq('email', authUser.email)
-              .single();
-      
-            setUser({
-              id: profile.id,
-              username: profile.username || authUser.email || '',
-              name: profile.full_name || 'ผู้ใช้ใหม่',
-              role: profile.role || UserRole.STAFF,
-              department: employeeData?.department || 'N/A'
-            });
         } catch (error) {
-            console.error("Error fetching user profile:", error);
-            setUser(null);
-            // Optionally sign out the user if their profile is crucial and missing
-            // await supabase.auth.signOut();
+            console.error("Failed to parse user from localStorage", error);
+            localStorage.removeItem('officemate_user');
+        } finally {
+            setIsLoading(false);
         }
     }, []);
 
-
-    useEffect(() => {
-        if (!supabase) {
-            setIsLoading(false);
-            return;
-        }
-
-        supabase.auth.getSession().then(({data: { session }}) => {
-             if (session) {
-                fetchAndSetUserProfile(session.user).finally(() => setIsLoading(false));
-             } else {
-                setIsLoading(false);
-             }
-        });
-
-        const { data: authListener } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-              if (session && (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED')) {
-                await fetchAndSetUserProfile(session.user);
-              } else if (event === 'SIGNED_OUT') {
-                setUser(null);
-              }
-              setIsLoading(false);
-            }
-          );
-      
-          return () => {
-            authListener.subscription.unsubscribe();
-          };
-    }, [fetchAndSetUserProfile]);
-
     const login = async (username: string, password: string): Promise<{ success: boolean; error: string | null }> => {
-        // Programmer backdoor login
-        if (username.toLowerCase() === 'programmer' && password === 'devaccess123') {
-            setIsLoading(true);
-            const programmerUser: User = {
-                id: 'programmer-001',
-                username: 'programmer',
-                name: 'Programmer',
-                role: UserRole.ADMIN,
-                department: 'System Control'
-            };
-            setUser(programmerUser);
-            setIsLoading(false);
-            return { success: true, error: null };
-        }
-
-        // Default Supabase login
-        if (!supabase) return { success: false, error: 'Supabase client not initialized.' };
-        
         setIsLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email: username,
-            password: password,
-        });
-        setIsLoading(false);
+        await new Promise(res => setTimeout(res, 500)); // Simulate network delay
 
-        if (error) {
-            console.error("Supabase login error:", error.message);
-            if (error.message.includes("Invalid login credentials")) {
-                return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
-            }
-            return { success: false, error: error.message };
+        const foundUser = mockUsersWithPasswords.find(
+            u => u.username.toLowerCase() === username.toLowerCase() && u.password === password
+        );
+        
+        setIsLoading(false);
+        if (foundUser) {
+            const { password: _p, ...userToStore } = foundUser; // Exclude password from stored object
+            setUser(userToStore);
+            localStorage.setItem('officemate_user', JSON.stringify(userToStore));
+            return { success: true, error: null };
+        } else {
+            return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
         }
-        return { success: true, error: null };
     };
 
-    const logout = async () => {
-        // For programmer user, just clear local state
-        if (user?.username === 'programmer') {
-            setUser(null);
-            return;
-        }
-
-        if (!supabase) return;
-        setIsLoading(true);
-        await supabase.auth.signOut();
+    const logout = () => {
         setUser(null);
-        setIsLoading(false);
+        localStorage.removeItem('officemate_user');
     };
     
-    const updateUserContext = async (updatedUserData: Partial<User>) => {
-        if (user && updatedUserData) {
-           const finalUserData = { ...user, ...updatedUserData };
-           setUser(finalUserData);
-
-           if (user.username === 'programmer') return; // Do not update DB for programmer user
-
-           if (updatedUserData.name || updatedUserData.role) {
-             const { error } = await supabase
-                .from('profiles')
-                .update({ full_name: updatedUserData.name, role: updatedUserData.role })
-                .eq('id', user.id);
-
-            if (error) {
-                console.error("Failed to update user profile in DB", error);
-            }
-           }
-        }
+    const updateUserContext = (updatedUserData: Partial<User>) => {
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        const newUser = { ...prevUser, ...updatedUserData };
+        localStorage.setItem('officemate_user', JSON.stringify(newUser));
+        return newUser;
+      });
     };
 
     return (

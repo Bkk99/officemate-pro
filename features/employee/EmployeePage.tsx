@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User, Database, EmployeeStatusKey } from '../../types';
+import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User, EmployeeStatusKey } from '../../types';
 import { 
     getEmployees, addEmployee, updateEmployee, deleteEmployee, 
     addTimeLog, getEmployeeTimeLogs, getPayrollComponents,
@@ -288,7 +288,7 @@ export const EmployeePage: React.FC = () => {
 
   const handleImportEmployees = async (parsedData: any[]): Promise<{success: boolean, message: string}> => {
     try {
-        const employeesToInsert: Database['public']['Tables']['employees']['Insert'][] = parsedData.map((row, index) => {
+        const employeesToInsert: Partial<Employee>[] = parsedData.map((row, index) => {
             const thaiName = row[employeeCsvHeaderMapping.name];
             if (!thaiName) {
                 throw new Error(`แถวที่ ${index + 2}: ไม่พบข้อมูล 'ชื่อ-นามสกุล (ไทย)' ซึ่งเป็นข้อมูลบังคับ`);
@@ -298,22 +298,22 @@ export const EmployeePage: React.FC = () => {
             
             return {
                 name: thaiName,
-                name_en: row[employeeCsvHeaderMapping.nameEn] || null,
-                employee_code: row[employeeCsvHeaderMapping.employeeCode] || null,
+                nameEn: row[employeeCsvHeaderMapping.nameEn] || undefined,
+                employeeCode: row[employeeCsvHeaderMapping.employeeCode] || undefined,
                 email: row[employeeCsvHeaderMapping.email] || `user${Date.now()+index}@example.com`,
                 phone: row[employeeCsvHeaderMapping.phone] || '',
                 department: row[employeeCsvHeaderMapping.department] || DEPARTMENTS[0],
                 position: row[employeeCsvHeaderMapping.position] || POSITIONS[0],
                 status: statusKey as EmployeeStatusKey,
-                hire_date: new Date(row[employeeCsvHeaderMapping.hireDate] || Date.now()).toISOString(),
-                base_salary: parseFloat(row[employeeCsvHeaderMapping.baseSalary]) || 0,
-                bank_name: row[employeeCsvHeaderMapping.bankName] || null,
-                bank_account_number: row[employeeCsvHeaderMapping.bankAccountNumber] || null,
-                tax_id: row[employeeCsvHeaderMapping.taxId] || null,
-                social_security_number: row[employeeCsvHeaderMapping.socialSecurityNumber] || null,
-                fingerprint_scanner_id: row[employeeCsvHeaderMapping.fingerprintScannerId] || null,
-                passport_number: row[employeeCsvHeaderMapping.passportNumber] || null,
-                passport_expiry_date: row[employeeCsvHeaderMapping.passportExpiryDate] ? new Date(row[employeeCsvHeaderMapping.passportExpiryDate]).toISOString() : null,
+                hireDate: new Date(row[employeeCsvHeaderMapping.hireDate] || Date.now()).toISOString(),
+                baseSalary: parseFloat(row[employeeCsvHeaderMapping.baseSalary]) || 0,
+                bankName: row[employeeCsvHeaderMapping.bankName] || undefined,
+                bankAccountNumber: row[employeeCsvHeaderMapping.bankAccountNumber] || undefined,
+                taxId: row[employeeCsvHeaderMapping.taxId] || undefined,
+                socialSecurityNumber: row[employeeCsvHeaderMapping.socialSecurityNumber] || undefined,
+                fingerprintScannerId: row[employeeCsvHeaderMapping.fingerprintScannerId] || undefined,
+                passportNumber: row[employeeCsvHeaderMapping.passportNumber] || undefined,
+                passportExpiryDate: row[employeeCsvHeaderMapping.passportExpiryDate] ? new Date(row[employeeCsvHeaderMapping.passportExpiryDate]).toISOString() : undefined,
             };
         });
 
