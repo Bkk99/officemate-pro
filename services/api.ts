@@ -43,7 +43,7 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?:
         options: {
             data: {
                 full_name: employeeData.name,
-                // role: employeeData.role, // Removing role from auth metadata to prevent potential signup conflicts
+                role: employeeData.role,
             }
         }
     });
