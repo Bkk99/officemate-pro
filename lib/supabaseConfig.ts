@@ -1,3 +1,3 @@
 // /lib/supabaseConfig.ts
-
-// This file is intentionally left empty as Supabase has been removed from the project.
+// This file is no longer used. The Supabase client is configured in /lib/supabaseClient.ts
+export {};

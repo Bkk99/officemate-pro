@@ -1,220 +1,171 @@
 // services/api.ts
+import { supabase } from '../lib/supabaseClient';
 import { 
-    User, Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, 
+    Employee, TimeLog, InventoryItem, StockTransaction, PurchaseOrder, Document, CalendarEvent, 
     PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, UserRole, 
-    ManagedUser, LeaveType, EmployeeStatusKey 
+    ManagedUser
 } from '../types';
-import { DEPARTMENTS, POSITIONS, DEFAULT_PAYROLL_COMPONENTS, CHAT_ROOMS_SAMPLE, AI_ASSISTANT_ROOM_ID } from '../constants';
 
-// --- Mock Database (using localStorage) ---
-const getFromStorage = <T>(key: string, defaultValue: T): T => {
-    try {
-        const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-        console.error(`Error reading from localStorage key “${key}”:`, error);
-        return defaultValue;
+// Helper to handle Supabase errors
+const handleSupabaseError = ({ error, customMessage }: { error: any, customMessage: string }) => {
+    if (error) {
+        console.error(customMessage, error);
+        throw new Error(`${customMessage}: ${error.message}`);
     }
-};
+}
 
-const saveToStorage = (key: string, value: any) => {
-    try {
-        localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-        console.error(`Error writing to localStorage key “${key}”:`, error);
-    }
-};
+// --- API Functions (Supabase) ---
 
-const generateId = (prefix: string = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// Initialize mock data
-const initMockData = () => {
-    const defaultUsers = [
-        { id: 'user-admin-01', username: 'admin@officemate.com', name: 'คุณแอดมิน', role: UserRole.ADMIN, department: DEPARTMENTS[7] },
-        { id: 'user-manager-01', username: 'manager@officemate.com', name: 'คุณเมเนเจอร์', role: UserRole.MANAGER, department: DEPARTMENTS[0] },
-        { id: 'user-staff-01', username: 'staff@officemate.com', name: 'คุณสตาฟ', role: UserRole.STAFF, department: DEPARTMENTS[1] },
-        { id: 'user-hr-01', username: 'hr@officemate.com', name: 'คุณเอชอาร์', role: UserRole.STAFF, department: DEPARTMENTS[3] },
-        { id: 'user-programmer-01', username: 'programmer@officemate.com', name: 'โปรแกรมเมอร์', role: UserRole.Programmer, department: DEPARTMENTS[5] },
-    ];
-    const defaultEmployees: Employee[] = defaultUsers.map(u => ({
-        id: u.id.replace('user-','emp-'),
-        name: u.name,
-        nameEn: u.name.replace('คุณ', 'Mr.'),
-        employeeCode: `EMP${u.id.slice(-2)}`,
-        email: u.username,
-        phone: '081-234-5678',
-        department: u.department,
-        position: u.role === UserRole.ADMIN ? 'ผู้บริหาร' : u.role === UserRole.MANAGER ? 'ผู้จัดการ' : u.role === UserRole.Programmer ? 'นักพัฒนา' : 'พนักงาน',
-        status: 'Active' as EmployeeStatusKey,
-        hireDate: new Date(2023, 0, 15).toISOString(),
-        profileImageUrl: `https://i.pravatar.cc/150?u=${u.id}`,
-        baseSalary: u.role === UserRole.ADMIN ? 80000 : u.role === UserRole.MANAGER ? 60000 : 40000
-    }));
-
-    if (!localStorage.getItem('mock_users')) saveToStorage('mock_users', defaultUsers);
-    if (!localStorage.getItem('mock_employees')) saveToStorage('mock_employees', defaultEmployees);
-    if (!localStorage.getItem('mock_inventory_items')) saveToStorage('mock_inventory_items', []);
-    if (!localStorage.getItem('mock_stock_transactions')) saveToStorage('mock_stock_transactions', []);
-    if (!localStorage.getItem('mock_purchase_orders')) saveToStorage('mock_purchase_orders', []);
-    if (!localStorage.getItem('mock_documents')) saveToStorage('mock_documents', []);
-    if (!localStorage.getItem('mock_chat_messages')) {
-        const initialMessages: ChatMessage[] = [
-            { id: generateId('msg'), roomId: 'general', senderId: 'user-admin-01', senderName: 'คุณแอดมิน', timestamp: new Date().toISOString(), text: 'สวัสดีทุกคน ขอต้อนรับสู่ห้องแชททั่วไปครับ' },
-            { id: generateId('msg'), roomId: AI_ASSISTANT_ROOM_ID, senderId: 'ai-assistant', senderName: 'AI Assistant', timestamp: new Date().toISOString(), text: 'สวัสดีครับ มีอะไรให้ผมช่วยไหมครับ?' },
-        ];
-        saveToStorage('mock_chat_messages', initialMessages);
-    }
-    if (!localStorage.getItem('mock_calendar_events')) saveToStorage('mock_calendar_events', []);
-    if (!localStorage.getItem('mock_payroll_components')) saveToStorage('mock_payroll_components', DEFAULT_PAYROLL_COMPONENTS);
-    if (!localStorage.getItem('mock_payroll_runs')) saveToStorage('mock_payroll_runs', []);
-    if (!localStorage.getItem('mock_payslips')) saveToStorage('mock_payslips', []);
-    if (!localStorage.getItem('mock_leave_requests')) saveToStorage('mock_leave_requests', []);
-    if (!localStorage.getItem('mock_cash_advance_requests')) saveToStorage('mock_cash_advance_requests', []);
-    if (!localStorage.getItem('mock_settings')) saveToStorage('mock_settings', {});
-};
-
-initMockData();
-
-const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-
-// --- API Functions (Mock) ---
-
-// User Profiles
-export const getUserProfile = async (userId: string): Promise<User | null> => {
-    await delay(100);
-    const users = getFromStorage<User[]>('mock_users', []);
-    return users.find(u => u.id === userId) || null;
-};
-export const getAllUserProfiles = async (): Promise<User[]> => {
-    await delay(100);
-    return getFromStorage<User[]>('mock_users', []);
-};
-
-// Employees
+// User Profile / Employee
 export const getEmployees = async (): Promise<Employee[]> => {
-    await delay(200);
-    return getFromStorage<Employee[]>('mock_employees', []);
+    const { data, error } = await supabase.from('employees').select('*');
+    handleSupabaseError({ error, customMessage: 'Failed to fetch employees' });
+    return data || [];
 };
+
 export const getEmployeeById = async (id: string): Promise<Employee | null> => {
-    await delay(100);
-    const employees = getFromStorage<Employee[]>('mock_employees', []);
-    return employees.find(e => e.id === id) || null;
+    const { data, error } = await supabase.from('employees').select('*').eq('id', id).single();
+    // Allow not found error for auth checks
+    if (error && error.code !== 'PGRST116') {
+        handleSupabaseError({ error, customMessage: `Failed to fetch employee ${id}` });
+    }
+    return data;
 };
-export const addEmployee = async (employeeData: Omit<Employee, 'id'>): Promise<Employee> => {
-    await delay(200);
-    const employees = getFromStorage<Employee[]>('mock_employees', []);
-    const newEmployee = { ...employeeData, id: generateId('emp') };
-    employees.push(newEmployee);
-    saveToStorage('mock_employees', employees);
-    return newEmployee;
+
+// Creates auth user and profile
+export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?: string): Promise<Employee> => {
+    if(!password) throw new Error("Password is required to create a new employee.");
+    
+    // 1. Create Supabase auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: employeeData.email,
+        password: password,
+        options: {
+            data: {
+                full_name: employeeData.name,
+                role: employeeData.role,
+            }
+        }
+    });
+    handleSupabaseError({ error: authError, customMessage: 'Failed to create auth user' });
+    if (!authData.user) throw new Error("User creation did not return a user object.");
+
+    // 2. Insert employee profile with the auth user's ID
+    const profileData: Omit<Employee, 'id'> & { id: string } = {
+        ...employeeData,
+        id: authData.user.id,
+        updated_at: new Date().toISOString()
+    };
+    
+    const { data: profile, error: profileError } = await supabase.from('employees').insert(profileData as any).select().single();
+    handleSupabaseError({ error: profileError, customMessage: 'Failed to create employee profile' });
+
+    return profile;
 };
+
 export const addBulkEmployees = async (newEmployees: Partial<Employee>[]): Promise<void> => {
-    await delay(500);
-    const employees = getFromStorage<Employee[]>('mock_employees', []);
-    const processedEmployees = newEmployees.map(e => ({ ...e, id: generateId('emp') } as Employee));
-    saveToStorage('mock_employees', [...employees, ...processedEmployees]);
+    // This is complex with Supabase auth. For now, we'll just insert profiles.
+    // In a real app, this should be a server-side function.
+    const { error } = await supabase.from('employees').insert(newEmployees as any);
+    handleSupabaseError({ error, customMessage: 'Failed to bulk insert employees' });
 };
+
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
-    await delay(200);
-    let employees = getFromStorage<Employee[]>('mock_employees', []);
-    employees = employees.map(e => e.id === updatedEmployee.id ? updatedEmployee : e);
-    saveToStorage('mock_employees', employees);
-    return updatedEmployee;
+    const { id, ...updateData } = updatedEmployee;
+    const { data, error } = await supabase.from('employees').update({ ...updateData, updated_at: new Date().toISOString() } as any).eq('id', id).select().single();
+    handleSupabaseError({ error, customMessage: `Failed to update employee ${id}` });
+    return data;
 };
+
 export const deleteEmployee = async (id: string): Promise<void> => {
-    await delay(200);
-    let employees = getFromStorage<Employee[]>('mock_employees', []);
-    employees = employees.filter(e => e.id !== id);
-    saveToStorage('mock_employees', employees);
+    // Note: This only deletes the profile, not the auth.user. 
+    // Deleting auth users should be a protected server-side operation.
+    const { error } = await supabase.from('employees').delete().eq('id', id);
+    handleSupabaseError({ error, customMessage: `Failed to delete employee ${id}` });
 };
+
 export const getAllEmployees = getEmployees;
 
-// Time Logs
-export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
-    await delay(150);
-    const allLogs = getFromStorage<TimeLog[]>('mock_time_logs', []);
-    return allLogs.filter(log => log.employeeId === employeeId).sort((a,b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime());
-};
-export const addTimeLog = async (logData: Omit<TimeLog, 'id'>): Promise<TimeLog> => {
-    await delay(100);
-    const logs = getFromStorage<TimeLog[]>('mock_time_logs', []);
-    const newLog = { ...logData, id: generateId('log') };
-    logs.push(newLog);
-    saveToStorage('mock_time_logs', logs);
-    return newLog;
-};
-
-// Generic CRUD for simplicity
-const createMockCrud = <T extends { id: string }>(storageKey: string, delayMs: number = 100) => ({
+// Generic CRUD factory
+const createCrud = <T extends { id: string }>(tableName: string) => ({
     getAll: async (): Promise<T[]> => {
-        await delay(delayMs);
-        return getFromStorage<T[]>(storageKey, []);
+        const { data, error } = await supabase.from(tableName).select('*');
+        handleSupabaseError({ error, customMessage: `Failed to fetch all from ${tableName}` });
+        return data || [];
     },
     getById: async (id: string): Promise<T | null> => {
-        await delay(delayMs);
-        const items = getFromStorage<T[]>(storageKey, []);
-        return items.find(item => item.id === id) || null;
+        const { data, error } = await supabase.from(tableName).select('*').eq('id', id).single();
+        handleSupabaseError({ error, customMessage: `Failed to fetch ${id} from ${tableName}` });
+        return data;
     },
     add: async (itemData: Omit<T, 'id'>): Promise<T> => {
-        await delay(delayMs);
-        const items = getFromStorage<T[]>(storageKey, []);
-        const newItem = { ...itemData, id: generateId(storageKey) } as T;
-        items.push(newItem);
-        saveToStorage(storageKey, items);
-        return newItem;
+        const { data, error } = await supabase.from(tableName).insert(itemData as any).select().single();
+        handleSupabaseError({ error, customMessage: `Failed to add to ${tableName}` });
+        return data;
     },
     update: async (updatedItem: T): Promise<T> => {
-        await delay(delayMs);
-        let items = getFromStorage<T[]>(storageKey, []);
-        items = items.map(item => item.id === updatedItem.id ? updatedItem : item);
-        saveToStorage(storageKey, items);
-        return updatedItem;
+        const { id, ...updateData } = updatedItem;
+        const { data, error } = await supabase.from(tableName).update(updateData as any).eq('id', id).select().single();
+        handleSupabaseError({ error, customMessage: `Failed to update ${id} in ${tableName}` });
+        return data;
     },
     remove: async (id: string): Promise<void> => {
-        await delay(delayMs);
-        let items = getFromStorage<T[]>(storageKey, []);
-        items = items.filter(item => item.id !== id);
-        saveToStorage(storageKey, items);
+        const { error } = await supabase.from(tableName).delete().eq('id', id);
+        handleSupabaseError({ error, customMessage: `Failed to remove ${id} from ${tableName}` });
     },
 });
 
-const inventoryCrud = createMockCrud<InventoryItem>('mock_inventory_items');
-const stockTransactionCrud = createMockCrud<StockTransaction>('mock_stock_transactions');
-const poCrud = createMockCrud<PurchaseOrder>('mock_purchase_orders');
-const documentCrud = createMockCrud<Document>('mock_documents');
-const calendarEventCrud = createMockCrud<CalendarEvent>('mock_calendar_events');
-const payrollComponentCrud = createMockCrud<PayrollComponent>('mock_payroll_components');
-const payrollRunCrud = createMockCrud<PayrollRun>('mock_payroll_runs');
-const payslipCrud = createMockCrud<Payslip>('mock_payslips');
-const leaveRequestCrud = createMockCrud<LeaveRequest>('mock_leave_requests');
-const cashAdvanceCrud = createMockCrud<CashAdvanceRequest>('mock_cash_advance_requests');
-const chatMessageCrud = createMockCrud<ChatMessage>('mock_chat_messages');
+// Time Logs
+export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
+    const { data, error } = await supabase.from('time_logs').select('*').eq('employeeId', employeeId).order('clockIn', { ascending: false });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch time logs' });
+    return data || [];
+};
+export const addTimeLog = async (logData: Omit<TimeLog, 'id'>) => {
+    const { data, error } = await supabase.from('time_logs').insert(logData as any).select().single();
+    handleSupabaseError({ error, customMessage: 'Failed to add time log' });
+    return data;
+};
 
 // Inventory
-export const getInventoryItems = (category?: 'อุปกรณ์ IT' | 'General') => {
-    const allItems = getFromStorage<InventoryItem[]>('mock_inventory_items', []);
-    if (!category) return Promise.resolve(allItems);
-    return Promise.resolve(allItems.filter(item => item.category === category));
+export const getInventoryItems = async (category?: string): Promise<InventoryItem[]> => {
+    let query = supabase.from('inventory_items').select('*');
+    if (category) {
+        query = query.eq('category', category);
+    }
+    const { data, error } = await query;
+    handleSupabaseError({ error, customMessage: 'Failed to fetch inventory items' });
+    return data || [];
 };
-export const getStockTransactions = stockTransactionCrud.getAll;
-export const getInventoryItemTransactions = async (itemId: string) => {
-    const all = await stockTransactionCrud.getAll();
-    return all.filter(t => t.itemId === itemId);
+export const addInventoryItem = createCrud<InventoryItem>('inventory_items').add;
+export const updateInventoryItem = createCrud<InventoryItem>('inventory_items').update;
+export const deleteInventoryItem = createCrud<InventoryItem>('inventory_items').remove;
+
+// Stock Transactions
+export const getStockTransactions = createCrud<StockTransaction>('stock_transactions').getAll;
+export const getInventoryItemTransactions = async (itemId: string): Promise<StockTransaction[]> => {
+    const { data, error } = await supabase.from('stock_transactions').select('*').eq('itemId', itemId).order('date', { ascending: false });
+    handleSupabaseError({ error, customMessage: `Failed to fetch transactions for item ${itemId}` });
+    return data || [];
 };
-export const addInventoryItem = inventoryCrud.add;
-export const updateInventoryItem = inventoryCrud.update;
-export const deleteInventoryItem = inventoryCrud.remove;
 export const addStockTransaction = async (txData: Omit<StockTransaction, 'id'>) => {
-    const newTx = await stockTransactionCrud.add(txData);
-    const item = await inventoryCrud.getById(newTx.itemId);
+    // This should be a transaction in a real backend.
+    const { data: newTx, error: txError } = await supabase.from('stock_transactions').insert(txData as any).select().single();
+    handleSupabaseError({ error: txError, customMessage: 'Failed to add stock transaction' });
+
+    const { data: item, error: itemError } = await supabase.from('inventory_items').select('quantity').eq('id', newTx.itemId).single();
+    handleSupabaseError({ error: itemError, customMessage: `Failed to fetch item for stock update` });
+
     if (item) {
         const newQuantity = item.quantity + (newTx.type === 'IN' ? newTx.quantity : -newTx.quantity);
-        await inventoryCrud.update({ ...item, quantity: newQuantity, lastUpdated: new Date().toISOString() });
+        const { error: updateError } = await supabase.from('inventory_items').update({ quantity: newQuantity, lastUpdated: new Date().toISOString() } as any).eq('id', newTx.itemId);
+        handleSupabaseError({ error: updateError, customMessage: `Failed to update item quantity` });
     }
     return newTx;
 };
 
-// POs
+// Purchase Orders
+const poCrud = createCrud<PurchaseOrder>('purchase_orders');
 export const getPurchaseOrders = poCrud.getAll;
 export const addPurchaseOrder = poCrud.add;
 export const updatePurchaseOrder = poCrud.update;
@@ -222,25 +173,29 @@ export const deletePurchaseOrder = poCrud.remove;
 export const getAllPurchaseOrders = getPurchaseOrders;
 
 // Documents
+const documentCrud = createCrud<Document>('documents');
 export const getDocuments = documentCrud.getAll;
 export const addDocument = documentCrud.add;
 export const updateDocument = documentCrud.update;
 export const deleteDocument = documentCrud.remove;
 
 // Chat
-export const getChatMessages = async (roomId: string) => {
-    const all = await chatMessageCrud.getAll();
-    return all.filter(m => m.roomId === roomId);
+export const getChatMessages = async (roomId: string): Promise<ChatMessage[]> => {
+    const { data, error } = await supabase.from('chat_messages').select('*').eq('roomId', roomId).order('timestamp', { ascending: true });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch chat messages' });
+    return data || [];
 };
-export const addChatMessage = chatMessageCrud.add;
+export const addChatMessage = createCrud<ChatMessage>('chat_messages').add;
 
 // Calendar
+const calendarEventCrud = createCrud<CalendarEvent>('calendar_events');
 export const getCalendarEvents = calendarEventCrud.getAll;
 export const addCalendarEvent = calendarEventCrud.add;
 export const updateCalendarEvent = calendarEventCrud.update;
 export const deleteCalendarEvent = calendarEventCrud.remove;
 
 // Leave Requests
+const leaveRequestCrud = createCrud<LeaveRequest>('leave_requests');
 export const getLeaveRequests = leaveRequestCrud.getAll;
 export const addLeaveRequest = leaveRequestCrud.add;
 export const updateLeaveRequest = leaveRequestCrud.update;
@@ -248,12 +203,16 @@ export const deleteLeaveRequest = leaveRequestCrud.remove;
 export const getAllLeaveRequests = getLeaveRequests;
 
 // Cash Advance
+const cashAdvanceCrud = createCrud<CashAdvanceRequest>('cash_advance_requests');
 export const getCashAdvanceRequests = cashAdvanceCrud.getAll;
 export const addCashAdvanceRequest = cashAdvanceCrud.add;
 export const updateCashAdvanceRequest = cashAdvanceCrud.update;
 export const deleteCashAdvanceRequest = cashAdvanceCrud.remove;
 
 // Payroll
+const payrollComponentCrud = createCrud<PayrollComponent>('payroll_components');
+const payrollRunCrud = createCrud<PayrollRun>('payroll_runs');
+const payslipCrud = createCrud<Payslip>('payslips');
 export const getPayrollComponents = payrollComponentCrud.getAll;
 export const addPayrollComponent = payrollComponentCrud.add;
 export const updatePayrollComponent = payrollComponentCrud.update;
@@ -265,21 +224,30 @@ export const getPayrollRunById = payrollRunCrud.getById;
 export const addPayrollRun = payrollRunCrud.add;
 export const updatePayrollRun = payrollRunCrud.update;
 export const deletePayrollRun = async (runId: string) => {
-    const run = await payrollRunCrud.getById(runId);
-    if (run) {
-        let allPayslips = await payslipCrud.getAll();
-        const payslipsToKeep = allPayslips.filter(p => !run.payslipIds.includes(p.id));
-        saveToStorage('mock_payslips', payslipsToKeep);
+    // This should be a database transaction
+    const run = await getPayrollRunById(runId);
+    if (!run) {
+        throw new Error(`Payroll run with ID ${runId} not found.`);
     }
-    await payrollRunCrud.remove(runId);
+    
+    if (run.payslipIds && run.payslipIds.length > 0) {
+        const { error: payslipError } = await supabase.from('payslips').delete().in('id', run.payslipIds);
+        handleSupabaseError({ error: payslipError, customMessage: 'Failed to delete associated payslips' });
+    }
+    
+    const { error: deleteRunError } = await supabase.from('payroll_runs').delete().eq('id', runId);
+    handleSupabaseError({ error: deleteRunError, customMessage: 'Failed to delete payroll run' });
 };
-export const getPayslipsForRun = async (runId: string) => {
-    const all = await payslipCrud.getAll();
-    return all.filter(p => p.payrollRunId === runId);
+
+export const getPayslipsForRun = async (runId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('payrollRunId', runId);
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for run' });
+    return data || [];
 };
-export const getPayslipsForEmployee = async (employeeId: string) => {
-    const all = await payslipCrud.getAll();
-    return all.filter(p => p.employeeId === employeeId);
+export const getPayslipsForEmployee = async (employeeId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('employeeId', employeeId);
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for employee' });
+    return data || [];
 };
 export const addPayslip = payslipCrud.add;
 export const updatePayslip = payslipCrud.update;
@@ -287,33 +255,33 @@ export const deletePayslip = payslipCrud.remove;
 
 // Settings
 export const getSetting = async (key: string): Promise<any | null> => {
-    await delay(50);
-    const settings = getFromStorage<any>('mock_settings', {});
-    return settings[key] || null;
+    const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
+    if (error && error.code !== 'PGRST116') { // Ignore "Row not found"
+        handleSupabaseError({ error, customMessage: `Failed to get setting ${key}` });
+    }
+    return data ? data.value : null;
 };
 export const saveSetting = async (key: string, value: any): Promise<void> => {
-    await delay(50);
-    const settings = getFromStorage<any>('mock_settings', {});
-    settings[key] = value;
-    saveToStorage('mock_settings', settings);
+    const { error } = await supabase.from('settings').upsert({ key, value } as any);
+    handleSupabaseError({ error, customMessage: `Failed to save setting ${key}` });
 };
 
 // User Management (Admin)
 export const getManagedUsers = async (): Promise<ManagedUser[]> => {
-    await delay(200);
-    const users = getFromStorage<User[]>('mock_users', []);
-    return users.map(u => ({
+    // This should ideally come from a view or auth.users, but based on previous structure:
+    const { data, error } = await supabase.from('employees').select('id, name, email, role, updated_at');
+    handleSupabaseError({ error, customMessage: `Failed to get managed users` });
+    return (data || []).map(u => ({
         id: u.id,
         full_name: u.name,
-        username: u.username,
+        username: u.email,
         role: u.role,
-        updated_at: new Date().toISOString(),
+        updated_at: u.updated_at
     }));
 };
-
 export const updateUserRole = async (userId: string, role: UserRole): Promise<void> => {
-    await delay(200);
-    let users = getFromStorage<User[]>('mock_users', []);
-    users = users.map(u => u.id === userId ? { ...u, role } : u);
-    saveToStorage('mock_users', users);
+    // This updates the role in our public `employees` table.
+    // Syncing with auth.users.role would need a server-side trigger.
+    const { error } = await supabase.from('employees').update({ role, updated_at: new Date().toISOString() } as any).eq('id', userId);
+    handleSupabaseError({ error, customMessage: `Failed to update user role` });
 };

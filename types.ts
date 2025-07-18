@@ -1,6 +1,3 @@
-
-
-
 export enum UserRole {
   ADMIN = 'Admin',
   MANAGER = 'Manager',
@@ -45,12 +42,13 @@ export interface Employee {
   position: string;
   status: EmployeeStatusKey;
   hireDate: string; // Existing: Can be used as Joining Date
+  role: UserRole; // Added to align with User profile
   contractUrl?: string; // Link to contract PDF
   profileImageUrl?: string;
   fingerprintScannerId?: string; // New: For HIP Time integration
   passportNumber?: string; // New: For ID Card
   passportExpiryDate?: string; // New: For ID Card (ISO Date string)
-
+  updated_at?: string; // For tracking updates
 
   // Payroll specific fields
   baseSalary?: number;
@@ -360,4 +358,13 @@ export interface ManagedUser {
   username: string | null; // This will hold the email
   role: UserRole | null;
   updated_at: string | null;
+}
+
+// --- New type for Dashboard Activity Log ---
+export interface ActivityLog {
+  id: string;
+  text: string;
+  timestamp: string; // ISO Date string
+  link?: string;
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }

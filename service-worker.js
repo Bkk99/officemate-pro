@@ -46,6 +46,7 @@ const urlsToCache = [
   '/services/api.ts',
   '/services/notificationService.ts',
   '/utils/export.ts',
+  '/lib/supabaseClient.ts',
   // External assets
   'https://cdn.tailwindcss.com',
   'https://esm.sh/react-dom@^19.1.0/',
@@ -54,6 +55,8 @@ const urlsToCache = [
   'https://esm.sh/react-router-dom@^7.6.2',
   'https://esm.sh/recharts@^2.15.3',
   'https://esm.sh/@google/genai',
+  'https://esm.sh/@supabase/supabase-js@^2.51.0',
+  'https://esm.sh/@supabase/gotrue-js@^2.71.1',
   // Placeholder for images
   '/logo192.png',
   '/logo512.png',

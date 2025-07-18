@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Employee, TimeLog, UserRole, PayrollComponent, EmployeeAllowance, EmployeeDeduction, FingerprintScannerSettings, User, EmployeeStatusKey } from '../../types';
 import { 
@@ -78,9 +77,12 @@ const employeeCsvHeaderMapping = {
 
 const initialEmployeeState: Omit<Employee, 'id'> = {
   name: '', nameEn: '', employeeCode: '', email: '', phone: '', department: DEPARTMENTS[0], position: POSITIONS[0], status: 'Active', hireDate: new Date().toISOString().split('T')[0], profileImageUrl: `https://picsum.photos/seed/${Date.now()}/200/200`,
+  role: UserRole.STAFF, // Default role
   passportNumber: '', passportExpiryDate: '',
   baseSalary: 0, bankName: '', bankAccountNumber: '', taxId: '', socialSecurityNumber: '', providentFundRateEmployee: 0, providentFundRateEmployer: 0, recurringAllowances: [], recurringDeductions: [], fingerprintScannerId: ''
 };
+
+const userRoleOptions = Object.values(UserRole).map(role => ({ value: role, label: role }));
 
 export const EmployeePage: React.FC = () => {
   const { user } = useAuth();
@@ -93,6 +95,7 @@ export const EmployeePage: React.FC = () => {
   const [isViewLogsModalOpen, setIsViewLogsModalOpen] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Omit<Employee, 'id'> | Employee>(initialEmployeeState);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  const [password, setPassword] = useState(''); // For new employee creation
   const [selectedEmployeeForLogs, setSelectedEmployeeForLogs] = useState<Employee | null>(null);
   
   const [manualTimeLog, setManualTimeLog] = useState<{employeeId: string; clockIn: string; clockOut: string; notes: string}>({ employeeId: '', clockIn: '', clockOut: '', notes: '' });
@@ -129,6 +132,7 @@ export const EmployeePage: React.FC = () => {
     } else {
       setCurrentEmployee({...initialEmployeeState, profileImageUrl: `https://picsum.photos/seed/${Date.now()}/200/200`});
       setEditingEmployeeId(null);
+      setPassword('');
     }
     setActiveTab('details');
     setIsModalOpen(true);
@@ -138,6 +142,7 @@ export const EmployeePage: React.FC = () => {
     setIsModalOpen(false);
     setCurrentEmployee(initialEmployeeState);
     setEditingEmployeeId(null);
+    setPassword('');
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -184,11 +189,15 @@ export const EmployeePage: React.FC = () => {
         if (editingEmployeeId) {
             await updateEmployee(currentEmployee as Employee);
         } else {
-            await addEmployee(currentEmployee as Omit<Employee, 'id'>);
+            if (!password || password.length < 6) {
+                alert("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+                return;
+            }
+            await addEmployee(currentEmployee as Omit<Employee, 'id'>, password);
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to save employee:", error);
-        alert("เกิดข้อผิดพลาดในการบันทึกข้อมูลพนักงาน");
+        alert(`เกิดข้อผิดพลาดในการบันทึกข้อมูลพนักงาน: ${error.message}`);
     } finally {
         await fetchAllData(); 
         handleCloseModal();
@@ -196,7 +205,7 @@ export const EmployeePage: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบพนักงานคนนี้? การดำเนินการนี้อาจส่งผลกระทบต่อข้อมูลที่เกี่ยวข้อง')) {
+    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการลบพนักงานคนนี้? การดำเนินการนี้อาจส่งผลกระทบต่อข้อมูลที่เกี่ยวข้อง และไม่สามารถย้อนกลับได้')) {
       try {
         await deleteEmployee(id);
         await fetchAllData();
@@ -314,6 +323,7 @@ export const EmployeePage: React.FC = () => {
                 fingerprintScannerId: row[employeeCsvHeaderMapping.fingerprintScannerId] || undefined,
                 passportNumber: row[employeeCsvHeaderMapping.passportNumber] || undefined,
                 passportExpiryDate: row[employeeCsvHeaderMapping.passportExpiryDate] ? new Date(row[employeeCsvHeaderMapping.passportExpiryDate]).toISOString() : undefined,
+                role: UserRole.STAFF, // Default role for import
             };
         });
 
@@ -322,7 +332,7 @@ export const EmployeePage: React.FC = () => {
         }
         
         await fetchAllData();
-        return { success: true, message: `นำเข้าสำเร็จ! เพิ่มพนักงานใหม่ ${employeesToInsert.length} คน` };
+        return { success: true, message: `นำเข้าสำเร็จ! เพิ่มพนักงานใหม่ ${employeesToInsert.length} คน (หมายเหตุ: บัญชีผู้ใช้ยังไม่ได้ถูกสร้าง)` };
     } catch (error: any) {
         console.error(error);
         return { success: false, message: `การนำเข้าล้มเหลว: ${error.message}` };
@@ -406,7 +416,11 @@ export const EmployeePage: React.FC = () => {
                     <Input label="รหัสพนักงาน" name="employeeCode" value={currentEmployee.employeeCode || ''} onChange={handleChange} />
                     <Input label="ชื่อ-นามสกุล (ไทย)" name="name" value={currentEmployee.name} onChange={handleChange} required />
                     <Input label="ชื่อ-นามสกุล (อังกฤษ)" name="nameEn" value={currentEmployee.nameEn || ''} onChange={handleChange} placeholder="Firstname Lastname"/>
-                    <Input label="อีเมล" name="email" type="email" value={currentEmployee.email} onChange={handleChange} required />
+                    <Input label="อีเมล (สำหรับเข้าระบบ)" name="email" type="email" value={currentEmployee.email} onChange={handleChange} required disabled={!!editingEmployeeId} />
+                    {!editingEmployeeId && (
+                         <Input label="รหัสผ่าน (สำหรับเข้าระบบ)" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
+                    )}
+                    <Select label="สิทธิ์การใช้งาน" name="role" value={(currentEmployee as Employee).role} onChange={handleChange} options={userRoleOptions} />
                     <Input label="เบอร์โทรศัพท์" name="phone" type="tel" value={currentEmployee.phone} onChange={handleChange} />
                     <Select label="แผนก" name="department" value={currentEmployee.department} onChange={handleChange} options={DEPARTMENTS.map(d => ({ value: d, label: d }))} />
                     <Select label="ตำแหน่ง" name="position" value={currentEmployee.position} onChange={handleChange} options={POSITIONS.map(p => ({ value: p, label: p }))} />
@@ -456,11 +470,6 @@ export const EmployeePage: React.FC = () => {
                     ))}
                     <Button variant="secondary" size="sm" onClick={() => addRecurringItem('deduction')} leftIcon={<PlusIcon className="h-4"/>}>เพิ่มเงินหักประจำ</Button>
                 </div>
-            </div>
-        )}
-        {user?.role === UserRole.ADMIN && (
-            <div className="mt-4 p-4 bg-yellow-50 rounded-lg text-sm text-yellow-800">
-                <strong>หมายเหตุ:</strong> หากต้องการสร้างหรือตรวจสอบบัญชีผู้ใช้สำหรับพนักงานคนนี้ กรุณาไปที่ Supabase Dashboard ของคุณในส่วน Authentication &gt; Users และตาราง `profiles`
             </div>
         )}
         <div className="mt-6 flex justify-end space-x-2">

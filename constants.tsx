@@ -10,7 +10,7 @@ const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
+export const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
   </svg>
@@ -28,7 +28,7 @@ const DocumentTextIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-const ShoppingCartIcon = (props: React.SVGProps<SVGSVGElement>) => (
+export const ShoppingCartIcon = (props: React.SVGProps<SVGSVGElement>) => (
  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
   </svg>
@@ -83,7 +83,7 @@ const FingerprintIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-const CalendarUserIcon = (props: React.SVGProps<SVGSVGElement>) => ( // Icon for Leave Management
+export const CalendarUserIcon = (props: React.SVGProps<SVGSVGElement>) => ( // Icon for Leave Management
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 12.75V15m0 6V12.75m0 0H9.75m2.25 0H14.25M3.75 3v1.5M20.25 3v1.5M3.75 10.5h16.5M3.75 14.25h16.5" />

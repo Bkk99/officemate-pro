@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Link } from 'react-router-dom';
-import { NAV_ITEMS, DEPARTMENTS } from '../../constants'; 
-import { UserRole } from '../../types';
+import { NAV_ITEMS, DEPARTMENTS, LEAVE_TYPES_TH, ShoppingCartIcon, UsersIcon, CalendarUserIcon } from '../../constants'; 
+import { UserRole, ActivityLog } from '../../types';
 import { AnnouncementSettingsModal } from '../admin/AnnouncementSettingsModal';
 import { Button } from '../../components/ui/Button';
+import { getAllPurchaseOrders, getAllLeaveRequests, getAllEmployees } from '../../services/api';
+import { Spinner } from '../../components/ui/Spinner';
 
 // Icons for dashboard cards (simplified)
 const UsersIconSolid = (props: React.SVGProps<SVGSVGElement>) => (
@@ -56,8 +58,57 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
+  const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
+
+  const fetchRecentActivities = useCallback(async () => {
+    setIsActivitiesLoading(true);
+    try {
+        const [pos, leaves, employees] = await Promise.all([
+            getAllPurchaseOrders(),
+            getAllLeaveRequests(),
+            getAllEmployees()
+        ]);
+
+        const poActivities: ActivityLog[] = pos.map(po => ({
+            id: `po-${po.id}`,
+            text: `ใบสั่งซื้อใหม่ #${po.poNumber} ถูกสร้างขึ้นสำหรับ ${po.supplier}`,
+            timestamp: po.orderDate,
+            link: `/purchase-orders`,
+            icon: ShoppingCartIcon
+        }));
+
+        const leaveActivities: ActivityLog[] = leaves.map(lr => ({
+            id: `leave-${lr.id}`,
+            text: `${lr.employeeName} ได้ยื่นขอ${LEAVE_TYPES_TH[lr.leaveType]}`,
+            timestamp: lr.requestedDate,
+            link: `/leave-management`,
+            icon: CalendarUserIcon
+        }));
+
+        const employeeActivities: ActivityLog[] = employees.map(emp => ({
+            id: `emp-${emp.id}`,
+            text: `พนักงานใหม่ ${emp.name} ได้เข้าร่วมทีม`,
+            timestamp: emp.hireDate,
+            link: `/employees`,
+            icon: UsersIcon
+        }));
+
+        const allActivities = [...poActivities, ...leaveActivities, ...employeeActivities]
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .slice(0, 5); // Take the 5 most recent activities
+
+        setRecentActivities(allActivities);
+
+    } catch (error) {
+        console.error("Failed to fetch recent activities", error);
+    } finally {
+        setIsActivitiesLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    fetchRecentActivities();
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setInstallPromptEvent(e);
@@ -66,7 +117,7 @@ export const DashboardPage: React.FC = () => {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [fetchRecentActivities]);
 
   if (!user) return null;
 
@@ -153,12 +204,40 @@ export const DashboardPage: React.FC = () => {
         </div>
       </Card>
 
-      <Card title="กิจกรรมล่าสุด (ตัวอย่าง)">
-        <ul className="space-y-3">
-          <li className="p-3 bg-secondary-50 rounded-md text-sm">ใบสั่งซื้อใหม่ #PO-2024-0078 ถูกสร้างขึ้น</li>
-          <li className="p-3 bg-secondary-50 rounded-md text-sm">พนักงาน สมชาย ใจดี ลงเวลาเข้างาน 9:03 น.</li>
-          <li className="p-3 bg-secondary-50 rounded-md text-sm">สินค้า "กระดาษ A4" ใกล้หมดสต็อก</li>
-        </ul>
+      <Card title="กิจกรรมล่าสุด">
+        {isActivitiesLoading ? (
+            <div className="flex justify-center items-center h-24">
+                <Spinner />
+            </div>
+        ) : recentActivities.length > 0 ? (
+            <ul className="space-y-4">
+                {recentActivities.map(activity => (
+                    <li key={activity.id} className="flex items-start space-x-4">
+                        <div className="flex-shrink-0">
+                            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                                {activity.icon && <activity.icon className="h-5 w-5 text-primary-600" />}
+                            </div>
+                        </div>
+                        <div>
+                            <p className="text-sm text-gray-800">
+                                {activity.link ? (
+                                    <Link to={activity.link} className="hover:underline font-medium">{activity.text}</Link>
+                                ) : (
+                                    <span className="font-medium">{activity.text}</span>
+                                )}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                                {new Date(activity.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                &nbsp;-&nbsp;
+                                {new Date(activity.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit'})} น.
+                            </p>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        ) : (
+            <p className="text-center text-gray-500 py-4">ไม่มีกิจกรรมล่าสุด</p>
+        )}
       </Card>
       
       {canManageAnnouncements && (

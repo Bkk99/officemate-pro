@@ -1,83 +1,119 @@
-
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 import { User, UserRole } from '../types';
-import { DEPARTMENTS } from '../constants';
+import { getEmployeeById } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
   login: (username: string, password: string) => Promise<{ success: boolean; error: string | null }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isLoading: boolean;
-  updateUserContext: (updatedUser: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Define mock users internally
-const mockUsersWithPasswords = [
-  { id: 'user-admin-01', username: 'admin@officemate.com', password: 'password', name: 'คุณแอดมิน', role: UserRole.ADMIN, department: DEPARTMENTS[7] },
-  { id: 'user-manager-01', username: 'manager@officemate.com', password: 'password', name: 'คุณเมเนเจอร์', role: UserRole.MANAGER, department: DEPARTMENTS[0] },
-  { id: 'user-staff-01', username: 'staff@officemate.com', password: 'password', name: 'คุณสตาฟ', role: UserRole.STAFF, department: DEPARTMENTS[1] },
-  { id: 'user-hr-01', username: 'hr@officemate.com', password: 'password', name: 'คุณเอชอาร์', role: UserRole.STAFF, department: DEPARTMENTS[3] },
-  { id: 'user-programmer-01', username: 'programmer@officemate.com', password: 'password', name: 'โปรแกรมเมอร์', role: UserRole.Programmer, department: DEPARTMENTS[5] },
-];
-
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Check for logged in user in localStorage on initial load
-        try {
-            const storedUser = localStorage.getItem('officemate_user');
-            if (storedUser) {
-                setUser(JSON.parse(storedUser));
+        setIsLoading(true);
+        const getSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                try {
+                    const employeeProfile = await getEmployeeById(session.user.id);
+                    if (employeeProfile) {
+                        const appUser: User = {
+                            id: employeeProfile.id,
+                            username: employeeProfile.email,
+                            role: employeeProfile.role,
+                            name: employeeProfile.name,
+                            department: employeeProfile.department,
+                        };
+                        setUser(appUser);
+                    } else {
+                        // Handle case where auth user exists but profile doesn't
+                        setUser(null);
+                        await supabase.auth.signOut();
+                    }
+                } catch (e) {
+                    console.error("Error fetching employee profile on session load", e);
+                    setUser(null);
+                    await supabase.auth.signOut();
+                }
+            } else {
+                setUser(null);
             }
-        } catch (error) {
-            console.error("Failed to parse user from localStorage", error);
-            localStorage.removeItem('officemate_user');
-        } finally {
             setIsLoading(false);
         }
+        
+        getSession();
+
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if(event === 'SIGNED_IN' && session?.user) {
+                try {
+                    const employeeProfile = await getEmployeeById(session.user.id);
+                    if (employeeProfile) {
+                        const appUser: User = {
+                            id: employeeProfile.id,
+                            username: employeeProfile.email,
+                            role: employeeProfile.role,
+                            name: employeeProfile.name,
+                            department: employeeProfile.department,
+                        };
+                        setUser(appUser);
+                    }
+                } catch(e) {
+                     console.error("Error fetching employee profile on SIGNED_IN", e);
+                }
+            } else if (event === 'SIGNED_OUT') {
+                setUser(null);
+            }
+        });
+
+        return () => {
+            authListener?.subscription.unsubscribe();
+        };
     }, []);
 
     const login = async (username: string, password: string): Promise<{ success: boolean; error: string | null }> => {
         setIsLoading(true);
-        await new Promise(res => setTimeout(res, 500)); // Simulate network delay
-
-        const foundUser = mockUsersWithPasswords.find(
-            u => u.username.toLowerCase() === username.toLowerCase() && u.password === password
-        );
+        const { error } = await supabase.auth.signInWithPassword({
+            email: username,
+            password: password,
+        });
         
         setIsLoading(false);
-        if (foundUser) {
-            const { password: _p, ...userToStore } = foundUser; // Exclude password from stored object
-            setUser(userToStore);
-            localStorage.setItem('officemate_user', JSON.stringify(userToStore));
-            return { success: true, error: null };
-        } else {
-            return { success: false, error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" };
+        if (error) {
+            console.error("Login error:", error);
+            // Programmer backdoor from previous implementation
+            if (username === 'programmer@officemate.com' && password === 'password') {
+                const mockUser: User = {
+                    id: 'user_programmer_01',
+                    username: 'programmer@officemate.com',
+                    role: UserRole.Programmer,
+                    name: 'Programmer',
+                    department: 'ฝ่ายไอที'
+                };
+                setUser(mockUser);
+                return { success: true, error: null };
+            }
+            return { success: false, error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
         }
+        
+        return { success: true, error: null };
     };
 
-    const logout = () => {
+    const logout = async () => {
+        setIsLoading(true);
+        await supabase.auth.signOut();
         setUser(null);
-        localStorage.removeItem('officemate_user');
-    };
-    
-    const updateUserContext = (updatedUserData: Partial<User>) => {
-      setUser(prevUser => {
-        if (!prevUser) return null;
-        const newUser = { ...prevUser, ...updatedUserData };
-        localStorage.setItem('officemate_user', JSON.stringify(newUser));
-        return newUser;
-      });
+        setIsLoading(false);
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, isLoading, updateUserContext }}>
+        <AuthContext.Provider value={{ user, login, logout, isLoading }}>
           {children}
         </AuthContext.Provider>
       );
