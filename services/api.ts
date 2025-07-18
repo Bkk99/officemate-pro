@@ -10,7 +10,13 @@ import {
 const handleSupabaseError = ({ error, customMessage }: { error: any, customMessage: string }) => {
     if (error) {
         console.error(customMessage, error);
-        throw new Error(`${customMessage}: ${error.message}`);
+        const detailedMessage = [
+            error.message,
+            error.details ? `Details: ${error.details}` : '',
+            error.hint ? `Hint: ${error.hint}` : ''
+        ].filter(Boolean).join(' ');
+        
+        throw new Error(`${customMessage}: ${detailedMessage || 'An unknown error occurred'}`);
     }
 }
 
@@ -43,7 +49,7 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?:
         options: {
             data: {
                 full_name: employeeData.name,
-                role: employeeData.role,
+                // role: employeeData.role, // Removing role from auth metadata to prevent potential signup conflicts
             }
         }
     });
@@ -57,7 +63,7 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?:
         updated_at: new Date().toISOString()
     };
     
-    const { data: profile, error: profileError } = await supabase.from('employees').insert(profileData as any).select().single();
+    const { data: profile, error: profileError } = await supabase.from('employees').insert([profileData]).select().single();
     handleSupabaseError({ error: profileError, customMessage: 'Failed to create employee profile' });
 
     return profile;
@@ -72,7 +78,7 @@ export const addBulkEmployees = async (newEmployees: Partial<Employee>[]): Promi
 
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
     const { id, ...updateData } = updatedEmployee;
-    const { data, error } = await supabase.from('employees').update({ ...updateData, updated_at: new Date().toISOString() } as any).eq('id', id).select().single();
+    const { data, error } = await supabase.from('employees').update({ ...updateData, updated_at: new Date().toISOString() }).eq('id', id).select().single();
     handleSupabaseError({ error, customMessage: `Failed to update employee ${id}` });
     return data;
 };
@@ -99,7 +105,7 @@ const createCrud = <T extends { id: string }>(tableName: string) => ({
         return data;
     },
     add: async (itemData: Omit<T, 'id'>): Promise<T> => {
-        const { data, error } = await supabase.from(tableName).insert(itemData as any).select().single();
+        const { data, error } = await supabase.from(tableName).insert([itemData] as any).select().single();
         handleSupabaseError({ error, customMessage: `Failed to add to ${tableName}` });
         return data;
     },
@@ -122,7 +128,7 @@ export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]
     return data || [];
 };
 export const addTimeLog = async (logData: Omit<TimeLog, 'id'>) => {
-    const { data, error } = await supabase.from('time_logs').insert(logData as any).select().single();
+    const { data, error } = await supabase.from('time_logs').insert([logData]).select().single();
     handleSupabaseError({ error, customMessage: 'Failed to add time log' });
     return data;
 };
@@ -150,7 +156,7 @@ export const getInventoryItemTransactions = async (itemId: string): Promise<Stoc
 };
 export const addStockTransaction = async (txData: Omit<StockTransaction, 'id'>) => {
     // This should be a transaction in a real backend.
-    const { data: newTx, error: txError } = await supabase.from('stock_transactions').insert(txData as any).select().single();
+    const { data: newTx, error: txError } = await supabase.from('stock_transactions').insert([txData]).select().single();
     handleSupabaseError({ error: txError, customMessage: 'Failed to add stock transaction' });
 
     const { data: item, error: itemError } = await supabase.from('inventory_items').select('quantity').eq('id', newTx.itemId).single();
@@ -158,7 +164,7 @@ export const addStockTransaction = async (txData: Omit<StockTransaction, 'id'>) 
 
     if (item) {
         const newQuantity = item.quantity + (newTx.type === 'IN' ? newTx.quantity : -newTx.quantity);
-        const { error: updateError } = await supabase.from('inventory_items').update({ quantity: newQuantity, lastUpdated: new Date().toISOString() } as any).eq('id', newTx.itemId);
+        const { error: updateError } = await supabase.from('inventory_items').update({ quantity: newQuantity, lastUpdated: new Date().toISOString() }).eq('id', newTx.itemId);
         handleSupabaseError({ error: updateError, customMessage: `Failed to update item quantity` });
     }
     return newTx;
@@ -262,7 +268,7 @@ export const getSetting = async (key: string): Promise<any | null> => {
     return data ? data.value : null;
 };
 export const saveSetting = async (key: string, value: any): Promise<void> => {
-    const { error } = await supabase.from('settings').upsert({ key, value } as any);
+    const { error } = await supabase.from('settings').upsert({ key, value });
     handleSupabaseError({ error, customMessage: `Failed to save setting ${key}` });
 };
 
@@ -282,6 +288,6 @@ export const getManagedUsers = async (): Promise<ManagedUser[]> => {
 export const updateUserRole = async (userId: string, role: UserRole): Promise<void> => {
     // This updates the role in our public `employees` table.
     // Syncing with auth.users.role would need a server-side trigger.
-    const { error } = await supabase.from('employees').update({ role, updated_at: new Date().toISOString() } as any).eq('id', userId);
+    const { error } = await supabase.from('employees').update({ role, updated_at: new Date().toISOString() }).eq('id', userId);
     handleSupabaseError({ error, customMessage: `Failed to update user role` });
 };
