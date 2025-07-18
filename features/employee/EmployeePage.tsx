@@ -362,7 +362,7 @@ export const EmployeePage: React.FC = () => {
     { header: 'วันที่เริ่มงาน', accessor: (item) => new Date(item.hireDate).toLocaleDateString('th-TH') },
     { header: 'การดำเนินการ', accessor: (item) => (
       <div className="space-x-2">
-        {user?.role === UserRole.ADMIN && (
+        {(user?.role === UserRole.ADMIN || user?.role === UserRole.Programmer) && (
           <>
             <Button variant="ghost" size="sm" onClick={() => handleOpenModal(item)} title="แก้ไขข้อมูลพนักงาน"><PencilIcon className="h-4 w-4"/></Button>
             <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} title="ลบพนักงาน"><TrashIcon className="h-4 w-4 text-red-500"/></Button>
@@ -387,12 +387,12 @@ export const EmployeePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card title="จัดการข้อมูลพนักงาน" actions={ <div className="flex space-x-2"> {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}> {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"} </Button>)} <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button> {user?.role === UserRole.ADMIN && <Button onClick={() => setIsImportModalOpen(true)} variant="secondary" leftIcon={<ArrowUpTrayIcon className="h-5 w-5"/>}>นำเข้า CSV</Button>} {user?.role === UserRole.ADMIN && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>} </div> }>
+      <Card title="จัดการข้อมูลพนักงาน" actions={ <div className="flex space-x-2"> {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER) && (<Button onClick={handleSimulateScannerSyncMain} variant="secondary" disabled={isSyncingScanner} leftIcon={<ArrowPathIcon className={`h-5 w-5 ${isSyncingScanner ? 'animate-spin':''}`}/>}> {isSyncingScanner ? "กำลังซิงค์..." : "ซิงค์จากสแกนเนอร์"} </Button>)} <Button onClick={handleExportEmployees} variant="secondary" leftIcon={<ArrowDownTrayIcon className="h-5 w-5"/>}>ส่งออก CSV</Button> {(user?.role === UserRole.ADMIN || user?.role === UserRole.Programmer) && <Button onClick={() => setIsImportModalOpen(true)} variant="secondary" leftIcon={<ArrowUpTrayIcon className="h-5 w-5"/>}>นำเข้า CSV</Button>} {(user?.role === UserRole.ADMIN || user?.role === UserRole.MANAGER || user?.role === UserRole.Programmer) && <Button onClick={() => handleOpenModal()} leftIcon={<PlusIcon className="h-5 w-5"/>}>เพิ่มพนักงาน</Button>} </div> }>
         {scannerSyncMessage && (<div className={`mb-4 p-3 rounded-md text-sm ${scannerSyncMessage.includes("สำเร็จ") ? 'bg-green-50 text-green-700' : scannerSyncMessage.includes("ข้อผิดพลาด") ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}> {scannerSyncMessage} </div>)}
         <Table columns={employeeColumns} data={employees} isLoading={isLoading} emptyMessage="ไม่พบข้อมูลพนักงาน"/>
       </Card>
       
-      {user?.role === UserRole.ADMIN && (
+      {(user?.role === UserRole.ADMIN || user?.role === UserRole.Programmer) && (
         <ImportCsvModal 
             isOpen={isImportModalOpen}
             onClose={() => setIsImportModalOpen(false)}
