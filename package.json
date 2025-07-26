@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "serve -s . -l ${PORT:-8080}",
-    "build": "echo 'No build step required'"
+    "build": "mkdir dist && cp -r components contexts features lib services utils index.html index.tsx metadata.json App.tsx types.ts constants.tsx manifest.json service-worker.js dist && (cp *.png dist 2>/dev/null || true)"
   },
   "dependencies": {
     "react": "^19.1.0",
