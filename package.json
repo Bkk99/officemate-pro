@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "serve -s . -l ${PORT:-8080}",
-    "build": "mkdir dist && cp -r components contexts features lib services utils index.html index.tsx metadata.json App.tsx types.ts constants.tsx manifest.json service-worker.js dist && (cp *.png dist 2>/dev/null || true)"
+    "build": "esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --external:react --external:react-dom/* --external:react/* --external:react-router-dom --external:recharts --external:@google/genai --external:@supabase/supabase-js && cp index.html manifest.json service-worker.js dist/ && (cp *.png dist/ 2>/dev/null || true)"
   },
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "serve": "^14.2.3"
+    "serve": "^14.2.3",
+    "esbuild": "^0.20.0"
   }
 }
