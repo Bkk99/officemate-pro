@@ -5,6 +5,25 @@ import {
     PayrollRun, Payslip, PayrollComponent, LeaveRequest, ChatMessage, CashAdvanceRequest, UserRole, 
     ManagedUser
 } from '../types';
+import * as MockData from './realisticMockData';
+import { DEFAULT_PAYROLL_COMPONENTS } from '../constants';
+
+// --- Snake Case Conversion Helpers ---
+const camelToSnake = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+
+const convertKeysToSnakeCase = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(v => convertKeysToSnakeCase(v));
+    } else if (obj !== null && typeof obj === 'object' && obj.constructor === Object) {
+        return Object.keys(obj).reduce((acc, key) => {
+            const snakeKey = key.startsWith('_') ? key : camelToSnake(key);
+            acc[snakeKey] = convertKeysToSnakeCase(obj[key]);
+            return acc;
+        }, {} as any);
+    }
+    return obj;
+};
+
 
 // Helper to handle Supabase errors
 const handleSupabaseError = ({ error, customMessage }: { error: any, customMessage: string }) => {
@@ -20,72 +39,79 @@ const handleSupabaseError = ({ error, customMessage }: { error: any, customMessa
     }
 }
 
-// --- API Functions (Supabase) ---
+// --- API Functions (Supabase with Mock Fallback) ---
 
 // User Profile / Employee
 export const getEmployees = async (): Promise<Employee[]> => {
     const { data, error } = await supabase.from('employees').select('*');
     handleSupabaseError({ error, customMessage: 'Failed to fetch employees' });
-    return data || [];
+    if (data && data.length > 0) return data as Employee[];
+    console.warn("Supabase 'employees' table is empty. Using mock data for demonstration.");
+    return MockData.mockEmployees;
 };
 
 export const getEmployeeById = async (id: string): Promise<Employee | null> => {
     const { data, error } = await supabase.from('employees').select('*').eq('id', id).single();
-    // Allow not found error for auth checks
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== 'PGRST116') { // Allow 'not found'
         handleSupabaseError({ error, customMessage: `Failed to fetch employee ${id}` });
     }
-    return data;
+    if (data) return data as Employee;
+
+    console.warn(`Employee ${id} not found in Supabase. Trying mock data.`);
+    const mockEmployee = MockData.mockEmployees.find(e => e.id === id);
+    return mockEmployee || null;
 };
 
 // Creates auth user and profile
 export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?: string): Promise<Employee> => {
     if(!password) throw new Error("Password is required to create a new employee.");
     
-    // 1. Create Supabase auth user
+    // Create the authentication user using the standard client
     const { data: authData, error: authError } = await supabase.auth.signUp({
         email: employeeData.email,
         password: password,
         options: {
             data: {
                 full_name: employeeData.name,
-                // role: employeeData.role, // Removing role from auth metadata to prevent potential signup conflicts
             }
         }
     });
     handleSupabaseError({ error: authError, customMessage: 'Failed to create auth user' });
     if (!authData.user) throw new Error("User creation did not return a user object.");
 
-    // 2. Insert employee profile with the auth user's ID
     const profileData: Omit<Employee, 'id'> & { id: string } = {
         ...employeeData,
         id: authData.user.id,
         updated_at: new Date().toISOString()
     };
     
-    const { data: profile, error: profileError } = await supabase.from('employees').insert([profileData]).select().single();
+    const snakeCaseProfile: Record<string, any> = convertKeysToSnakeCase(profileData);
+    const { data: profile, error: profileError } = await supabase.from('employees').insert([snakeCaseProfile]).select().single();
     handleSupabaseError({ error: profileError, customMessage: 'Failed to create employee profile' });
 
-    return profile;
+    if (!profile) {
+        throw new Error("Failed to create employee profile: insert operation did not return the new profile.");
+    }
+
+    return profile as Employee;
 };
 
 export const addBulkEmployees = async (newEmployees: Partial<Employee>[]): Promise<void> => {
-    // This is complex with Supabase auth. For now, we'll just insert profiles.
-    // In a real app, this should be a server-side function.
-    const { error } = await supabase.from('employees').insert(newEmployees as any);
+    const snakeCaseEmployees: Record<string, any>[] = convertKeysToSnakeCase(newEmployees);
+    const { error } = await supabase.from('employees').insert(snakeCaseEmployees);
     handleSupabaseError({ error, customMessage: 'Failed to bulk insert employees' });
 };
 
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
     const { id, ...updateData } = updatedEmployee;
-    const { data, error } = await supabase.from('employees').update({ ...updateData, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+    const snakeCaseData: Record<string, any> = convertKeysToSnakeCase({ ...updateData, updated_at: new Date().toISOString() });
+    const { data, error } = await supabase.from('employees').update(snakeCaseData).eq('id', id).select().single();
     handleSupabaseError({ error, customMessage: `Failed to update employee ${id}` });
-    return data;
+    if (!data) throw new Error('Update did not return data.');
+    return data as Employee;
 };
 
 export const deleteEmployee = async (id: string): Promise<void> => {
-    // Note: This only deletes the profile, not the auth.user. 
-    // Deleting auth users should be a protected server-side operation.
     const { error } = await supabase.from('employees').delete().eq('id', id);
     handleSupabaseError({ error, customMessage: `Failed to delete employee ${id}` });
 };
@@ -93,27 +119,37 @@ export const deleteEmployee = async (id: string): Promise<void> => {
 export const getAllEmployees = getEmployees;
 
 // Generic CRUD factory
-const createCrud = <T extends { id: string }>(tableName: string) => ({
+const createCrud = <T extends { id: string }>(tableName: string, mockDataArray: T[]) => ({
     getAll: async (): Promise<T[]> => {
         const { data, error } = await supabase.from(tableName).select('*');
         handleSupabaseError({ error, customMessage: `Failed to fetch all from ${tableName}` });
-        return data || [];
+        if (data && data.length > 0) return data as T[];
+        console.warn(`Supabase '${tableName}' table is empty. Using mock data for demonstration.`);
+        return mockDataArray;
     },
     getById: async (id: string): Promise<T | null> => {
         const { data, error } = await supabase.from(tableName).select('*').eq('id', id).single();
-        handleSupabaseError({ error, customMessage: `Failed to fetch ${id} from ${tableName}` });
-        return data;
+         if (error && error.code !== 'PGRST116') {
+             handleSupabaseError({ error, customMessage: `Failed to fetch ${id} from ${tableName}` });
+         }
+        if (data) return data as T;
+        console.warn(`${id} not found in Supabase '${tableName}'. Trying mock data.`);
+        return mockDataArray.find(item => item.id === id) || null;
     },
     add: async (itemData: Omit<T, 'id'>): Promise<T> => {
-        const { data, error } = await supabase.from(tableName).insert([itemData] as any).select().single();
+        const snakeCaseData: Record<string, any> = convertKeysToSnakeCase(itemData);
+        const { data, error } = await supabase.from(tableName).insert([snakeCaseData]).select().single();
         handleSupabaseError({ error, customMessage: `Failed to add to ${tableName}` });
-        return data;
+        if (!data) throw new Error(`Add operation on ${tableName} did not return data.`);
+        return data as T;
     },
     update: async (updatedItem: T): Promise<T> => {
         const { id, ...updateData } = updatedItem;
-        const { data, error } = await supabase.from(tableName).update(updateData as any).eq('id', id).select().single();
+        const snakeCaseData: Record<string, any> = convertKeysToSnakeCase(updateData);
+        const { data, error } = await supabase.from(tableName).update(snakeCaseData).eq('id', id).select().single();
         handleSupabaseError({ error, customMessage: `Failed to update ${id} in ${tableName}` });
-        return data;
+        if (!data) throw new Error(`Update operation on ${tableName} did not return data.`);
+        return data as T;
     },
     remove: async (id: string): Promise<void> => {
         const { error } = await supabase.from(tableName).delete().eq('id', id);
@@ -123,14 +159,17 @@ const createCrud = <T extends { id: string }>(tableName: string) => ({
 
 // Time Logs
 export const getEmployeeTimeLogs = async (employeeId: string): Promise<TimeLog[]> => {
-    const { data, error } = await supabase.from('time_logs').select('*').eq('employeeId', employeeId).order('clockIn', { ascending: false });
+    const { data, error } = await supabase.from('time_logs').select('*').eq('employee_id', employeeId).order('clock_in', { ascending: false });
     handleSupabaseError({ error, customMessage: 'Failed to fetch time logs' });
-    return data || [];
+    if (data && data.length > 0) return data as TimeLog[];
+    console.warn(`No time logs in Supabase for employee ${employeeId}. Using mock data.`);
+    return MockData.mockTimeLogs.filter(log => log.employeeId === employeeId);
 };
 export const addTimeLog = async (logData: Omit<TimeLog, 'id'>) => {
-    const { data, error } = await supabase.from('time_logs').insert([logData]).select().single();
+    const snakeCaseData = convertKeysToSnakeCase(logData) as Record<string, any>;
+    const { data, error } = await supabase.from('time_logs').insert([snakeCaseData] as any).select().single();
     handleSupabaseError({ error, customMessage: 'Failed to add time log' });
-    return data;
+    return data as TimeLog;
 };
 
 // Inventory
@@ -141,153 +180,182 @@ export const getInventoryItems = async (category?: string): Promise<InventoryIte
     }
     const { data, error } = await query;
     handleSupabaseError({ error, customMessage: 'Failed to fetch inventory items' });
-    return data || [];
+    if (data && data.length > 0) return data as InventoryItem[];
+    
+    console.warn(`Supabase 'inventory_items' is empty. Using mock data.`);
+    let mockItems = MockData.mockInventoryItems;
+    if (category) {
+        mockItems = mockItems.filter(item => item.category === category);
+    }
+    return mockItems;
 };
-export const addInventoryItem = createCrud<InventoryItem>('inventory_items').add;
-export const updateInventoryItem = createCrud<InventoryItem>('inventory_items').update;
-export const deleteInventoryItem = createCrud<InventoryItem>('inventory_items').remove;
+export const addInventoryItem = createCrud<InventoryItem>('inventory_items', MockData.mockInventoryItems).add;
+export const updateInventoryItem = createCrud<InventoryItem>('inventory_items', MockData.mockInventoryItems).update;
+export const deleteInventoryItem = createCrud<InventoryItem>('inventory_items', MockData.mockInventoryItems).remove;
 
 // Stock Transactions
-export const getStockTransactions = createCrud<StockTransaction>('stock_transactions').getAll;
+export const getStockTransactions = async (): Promise<StockTransaction[]> => {
+    const { data, error } = await supabase.from('stock_transactions').select('*').order('date', { ascending: false });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch stock transactions' });
+    if (data && data.length > 0) return data as StockTransaction[];
+    console.warn("Supabase 'stock_transactions' is empty. Using mock data.");
+    return MockData.mockStockTransactions;
+}
 export const getInventoryItemTransactions = async (itemId: string): Promise<StockTransaction[]> => {
-    const { data, error } = await supabase.from('stock_transactions').select('*').eq('itemId', itemId).order('date', { ascending: false });
+    const { data, error } = await supabase.from('stock_transactions').select('*').eq('item_id', itemId).order('date', { ascending: false });
     handleSupabaseError({ error, customMessage: `Failed to fetch transactions for item ${itemId}` });
-    return data || [];
+    if (data && data.length > 0) return data as StockTransaction[];
+    console.warn(`No transactions in Supabase for item ${itemId}. Using mock data.`);
+    return MockData.mockStockTransactions.filter(t => t.itemId === itemId);
 };
-export const addStockTransaction = async (txData: Omit<StockTransaction, 'id'>) => {
-    // This should be a transaction in a real backend.
-    const { data: newTx, error: txError } = await supabase.from('stock_transactions').insert([txData]).select().single();
-    handleSupabaseError({ error: txError, customMessage: 'Failed to add stock transaction' });
-
-    const { data: item, error: itemError } = await supabase.from('inventory_items').select('quantity').eq('id', newTx.itemId).single();
-    handleSupabaseError({ error: itemError, customMessage: `Failed to fetch item for stock update` });
-
-    if (item) {
-        const newQuantity = item.quantity + (newTx.type === 'IN' ? newTx.quantity : -newTx.quantity);
-        const { error: updateError } = await supabase.from('inventory_items').update({ quantity: newQuantity, lastUpdated: new Date().toISOString() }).eq('id', newTx.itemId);
-        handleSupabaseError({ error: updateError, customMessage: `Failed to update item quantity` });
-    }
-    return newTx;
+export const addStockTransaction = async (transactionData: Omit<StockTransaction, 'id'>): Promise<StockTransaction> => {
+    // This is a special case using an RPC function to also update inventory quantity
+    const { data, error } = await supabase.rpc('add_stock_transaction', {
+        item_id: transactionData.itemId,
+        item_name: transactionData.itemName,
+        transaction_type: transactionData.type,
+        quantity_change: transactionData.quantity,
+        reason_text: transactionData.reason,
+        transaction_date: transactionData.date,
+        employee_id: transactionData.employeeId,
+        employee_name: transactionData.employeeName,
+    });
+    handleSupabaseError({ error, customMessage: 'Failed to add stock transaction via RPC' });
+    // Note: RPC might not return the inserted row; this might need adjustment based on RPC definition
+    return { ...transactionData, id: `rpc-${Date.now()}` } as StockTransaction; // Mock return
 };
 
 // Purchase Orders
-const poCrud = createCrud<PurchaseOrder>('purchase_orders');
-export const getPurchaseOrders = poCrud.getAll;
-export const addPurchaseOrder = poCrud.add;
-export const updatePurchaseOrder = poCrud.update;
-export const deletePurchaseOrder = poCrud.remove;
+const purchaseOrderCrud = createCrud<PurchaseOrder>('purchase_orders', MockData.mockPurchaseOrders);
+export const getPurchaseOrders = purchaseOrderCrud.getAll;
+export const addPurchaseOrder = purchaseOrderCrud.add;
+export const updatePurchaseOrder = purchaseOrderCrud.update;
+export const deletePurchaseOrder = purchaseOrderCrud.remove;
 export const getAllPurchaseOrders = getPurchaseOrders;
 
 // Documents
-const documentCrud = createCrud<Document>('documents');
+const documentCrud = createCrud<Document>('documents', MockData.mockDocuments);
 export const getDocuments = documentCrud.getAll;
 export const addDocument = documentCrud.add;
 export const updateDocument = documentCrud.update;
 export const deleteDocument = documentCrud.remove;
 
-// Chat
-export const getChatMessages = async (roomId: string): Promise<ChatMessage[]> => {
-    const { data, error } = await supabase.from('chat_messages').select('*').eq('roomId', roomId).order('timestamp', { ascending: true });
-    handleSupabaseError({ error, customMessage: 'Failed to fetch chat messages' });
-    return data || [];
-};
-export const addChatMessage = createCrud<ChatMessage>('chat_messages').add;
-
-// Calendar
-const calendarEventCrud = createCrud<CalendarEvent>('calendar_events');
+// Calendar Events
+const calendarEventCrud = createCrud<CalendarEvent>('calendar_events', MockData.mockCalendarEvents);
 export const getCalendarEvents = calendarEventCrud.getAll;
 export const addCalendarEvent = calendarEventCrud.add;
 export const updateCalendarEvent = calendarEventCrud.update;
 export const deleteCalendarEvent = calendarEventCrud.remove;
 
-// Leave Requests
-const leaveRequestCrud = createCrud<LeaveRequest>('leave_requests');
-export const getLeaveRequests = leaveRequestCrud.getAll;
-export const addLeaveRequest = leaveRequestCrud.add;
-export const updateLeaveRequest = leaveRequestCrud.update;
-export const deleteLeaveRequest = leaveRequestCrud.remove;
-export const getAllLeaveRequests = getLeaveRequests;
-
-// Cash Advance
-const cashAdvanceCrud = createCrud<CashAdvanceRequest>('cash_advance_requests');
-export const getCashAdvanceRequests = cashAdvanceCrud.getAll;
-export const addCashAdvanceRequest = cashAdvanceCrud.add;
-export const updateCashAdvanceRequest = cashAdvanceCrud.update;
-export const deleteCashAdvanceRequest = cashAdvanceCrud.remove;
-
-// Payroll
-const payrollComponentCrud = createCrud<PayrollComponent>('payroll_components');
-const payrollRunCrud = createCrud<PayrollRun>('payroll_runs');
-const payslipCrud = createCrud<Payslip>('payslips');
-export const getPayrollComponents = payrollComponentCrud.getAll;
-export const addPayrollComponent = payrollComponentCrud.add;
-export const updatePayrollComponent = payrollComponentCrud.update;
-export const deletePayrollComponent = payrollComponentCrud.remove;
-export const getAllPayrollComponents = getPayrollComponents;
-
-export const getPayrollRuns = payrollRunCrud.getAll;
-export const getPayrollRunById = payrollRunCrud.getById;
-export const addPayrollRun = payrollRunCrud.add;
-export const updatePayrollRun = payrollRunCrud.update;
-export const deletePayrollRun = async (runId: string) => {
-    // This should be a database transaction
-    const run = await getPayrollRunById(runId);
-    if (!run) {
-        throw new Error(`Payroll run with ID ${runId} not found.`);
-    }
-    
-    if (run.payslipIds && run.payslipIds.length > 0) {
-        const { error: payslipError } = await supabase.from('payslips').delete().in('id', run.payslipIds);
-        handleSupabaseError({ error: payslipError, customMessage: 'Failed to delete associated payslips' });
-    }
-    
-    const { error: deleteRunError } = await supabase.from('payroll_runs').delete().eq('id', runId);
-    handleSupabaseError({ error: deleteRunError, customMessage: 'Failed to delete payroll run' });
-};
-
-export const getPayslipsForRun = async (runId: string): Promise<Payslip[]> => {
-    const { data, error } = await supabase.from('payslips').select('*').eq('payrollRunId', runId);
-    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for run' });
-    return data || [];
-};
-export const getPayslipsForEmployee = async (employeeId: string): Promise<Payslip[]> => {
-    const { data, error } = await supabase.from('payslips').select('*').eq('employeeId', employeeId);
-    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for employee' });
-    return data || [];
-};
-export const addPayslip = payslipCrud.add;
-export const updatePayslip = payslipCrud.update;
-export const deletePayslip = payslipCrud.remove;
-
 // Settings
-export const getSetting = async (key: string): Promise<any | null> => {
+export const getSetting = async (key: string): Promise<any> => {
     const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
-    if (error && error.code !== 'PGRST116') { // Ignore "Row not found"
-        handleSupabaseError({ error, customMessage: `Failed to get setting ${key}` });
+    if (error && error.code !== 'PGRST116') {
+        handleSupabaseError({ error, customMessage: `Failed to get setting: ${key}` });
     }
     return data ? data.value : null;
 };
 export const saveSetting = async (key: string, value: any): Promise<void> => {
-    const { error } = await supabase.from('settings').upsert({ key, value });
-    handleSupabaseError({ error, customMessage: `Failed to save setting ${key}` });
+    const { error } = await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
+    handleSupabaseError({ error, customMessage: `Failed to save setting: ${key}` });
 };
 
-// User Management (Admin)
-export const getManagedUsers = async (): Promise<ManagedUser[]> => {
-    // This should ideally come from a view or auth.users, but based on previous structure:
-    const { data, error } = await supabase.from('employees').select('id, name, email, role, updated_at');
-    handleSupabaseError({ error, customMessage: `Failed to get managed users` });
-    return (data || []).map(u => ({
-        id: u.id,
-        full_name: u.name,
-        username: u.email,
-        role: u.role,
-        updated_at: u.updated_at
-    }));
+// Payroll Runs
+export const getPayrollRuns = async (): Promise<PayrollRun[]> => {
+    const { data, error } = await supabase.from('payroll_runs').select('*').order('period_year', { ascending: false }).order('period_month', { ascending: false });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payroll runs' });
+    if(data && data.length > 0) return data as PayrollRun[];
+    console.warn("Supabase 'payroll_runs' is empty. Using mock data.");
+    return MockData.mockPayrollRuns;
 };
-export const updateUserRole = async (userId: string, role: UserRole): Promise<void> => {
-    // This updates the role in our public `employees` table.
-    // Syncing with auth.users.role would need a server-side trigger.
-    const { error } = await supabase.from('employees').update({ role, updated_at: new Date().toISOString() }).eq('id', userId);
-    handleSupabaseError({ error, customMessage: `Failed to update user role` });
+export const getPayrollRunById = createCrud<PayrollRun>('payroll_runs', MockData.mockPayrollRuns).getById;
+export const addPayrollRun = createCrud<PayrollRun>('payroll_runs', MockData.mockPayrollRuns).add;
+export const updatePayrollRun = createCrud<PayrollRun>('payroll_runs', MockData.mockPayrollRuns).update;
+export const deletePayrollRun = async (runId: string): Promise<void> => {
+    const { error: payslipError } = await supabase.from('payslips').delete().eq('payroll_run_id', runId);
+    handleSupabaseError({ error: payslipError, customMessage: 'Failed to delete payslips for run' });
+    const { error: runError } = await supabase.from('payroll_runs').delete().eq('id', runId);
+    handleSupabaseError({ error: runError, customMessage: 'Failed to delete payroll run' });
+};
+
+// Payslips
+export const getPayslipsForRun = async (runId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('payroll_run_id', runId);
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for run' });
+    if(data && data.length > 0) return data as Payslip[];
+    console.warn(`No payslips in Supabase for run ${runId}. Using mock data.`);
+    return MockData.mockPayslips.filter(p => p.payrollRunId === runId);
+};
+export const getPayslipsForEmployee = async (employeeId: string): Promise<Payslip[]> => {
+    const { data, error } = await supabase.from('payslips').select('*').eq('employee_id', employeeId);
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payslips for employee' });
+    if(data && data.length > 0) return data as Payslip[];
+    console.warn(`No payslips in Supabase for employee ${employeeId}. Using mock data.`);
+    return MockData.mockPayslips.filter(p => p.employeeId === employeeId);
+};
+export const addPayslip = createCrud<Payslip>('payslips', MockData.mockPayslips).add;
+export const updatePayslip = createCrud<Payslip>('payslips', MockData.mockPayslips).update;
+export const deletePayslip = createCrud<Payslip>('payslips', MockData.mockPayslips).remove;
+
+// Payroll Components
+export const getPayrollComponents = async(): Promise<PayrollComponent[]> => {
+    const { data, error } = await supabase.from('payroll_components').select('*');
+    handleSupabaseError({ error, customMessage: 'Failed to fetch payroll components' });
+    if(data && data.length > 0) return data as PayrollComponent[];
+    console.warn("Supabase 'payroll_components' is empty. Using default components from constants.");
+    return DEFAULT_PAYROLL_COMPONENTS;
+};
+export const addPayrollComponent = createCrud<PayrollComponent>('payroll_components', MockData.mockPayrollComponents).add;
+export const updatePayrollComponent = createCrud<PayrollComponent>('payroll_components', MockData.mockPayrollComponents).update;
+export const deletePayrollComponent = createCrud<PayrollComponent>('payroll_components', MockData.mockPayrollComponents).remove;
+export const getAllPayrollComponents = getPayrollComponents;
+
+// Leave Requests
+export const getLeaveRequests = async (): Promise<LeaveRequest[]> => {
+    const { data, error } = await supabase.from('leave_requests').select('*').order('requested_date', { ascending: false });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch leave requests' });
+    if(data && data.length > 0) return data as LeaveRequest[];
+    console.warn("Supabase 'leave_requests' is empty. Using mock data.");
+    return MockData.mockLeaveRequests;
+};
+export const addLeaveRequest = createCrud<LeaveRequest>('leave_requests', MockData.mockLeaveRequests).add;
+export const updateLeaveRequest = createCrud<LeaveRequest>('leave_requests', MockData.mockLeaveRequests).update;
+export const deleteLeaveRequest = createCrud<LeaveRequest>('leave_requests', MockData.mockLeaveRequests).remove;
+export const getAllLeaveRequests = getLeaveRequests;
+
+// Chat
+export const getChatMessages = async (roomId: string): Promise<ChatMessage[]> => {
+    const { data, error } = await supabase.from('chat_messages').select('*').eq('room_id', roomId).order('timestamp', { ascending: true });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch chat messages' });
+    if(data && data.length > 0) return data as ChatMessage[];
+    console.warn(`No messages in Supabase for room ${roomId}. Using mock data.`);
+    return MockData.mockChatMessages.filter(m => m.roomId === roomId);
+};
+export const addChatMessage = createCrud<ChatMessage>('chat_messages', MockData.mockChatMessages).add;
+
+// Cash Advance
+export const getCashAdvanceRequests = async (): Promise<CashAdvanceRequest[]> => {
+    const { data, error } = await supabase.from('cash_advance_requests').select('*').order('request_date', { ascending: false });
+    handleSupabaseError({ error, customMessage: 'Failed to fetch cash advance requests' });
+    if(data && data.length > 0) return data as CashAdvanceRequest[];
+    console.warn("Supabase 'cash_advance_requests' is empty. Using mock data.");
+    return MockData.mockCashAdvanceRequests;
+};
+export const addCashAdvanceRequest = createCrud<CashAdvanceRequest>('cash_advance_requests', MockData.mockCashAdvanceRequests).add;
+export const updateCashAdvanceRequest = createCrud<CashAdvanceRequest>('cash_advance_requests', MockData.mockCashAdvanceRequests).update;
+export const deleteCashAdvanceRequest = createCrud<CashAdvanceRequest>('cash_advance_requests', MockData.mockCashAdvanceRequests).remove;
+
+// --- Admin ---
+export const getManagedUsers = async (): Promise<ManagedUser[]> => {
+    const { data, error } = await supabase.rpc('get_users_with_employee_roles');
+    handleSupabaseError({ error, customMessage: 'Failed to fetch managed users' });
+    if(Array.isArray(data) && data.length > 0) return data as ManagedUser[];
+    console.warn("Supabase 'get_users_with_employee_roles' rpc returned empty. Using mock data.");
+    return MockData.mockManagedUsers;
+};
+
+export const updateUserRole = async (userId: string, newRole: UserRole): Promise<void> => {
+    const snakeCaseData: Record<string, any> = convertKeysToSnakeCase({ role: newRole, updated_at: new Date().toISOString() });
+    const { error } = await supabase.from('employees').update(snakeCaseData).eq('id', userId);
+    handleSupabaseError({ error, customMessage: `Failed to update role for user ${userId}` });
 };

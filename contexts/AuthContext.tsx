@@ -87,6 +87,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
         if (error) {
             console.error("Login error:", error);
+            if (error.message.includes('Email not confirmed')) {
+                return { success: false, error: 'อีเมลยังไม่ได้รับการยืนยัน กรุณาตรวจสอบกล่องจดหมายเพื่อยืนยันบัญชี' };
+            }
             // Programmer backdoor from previous implementation
             if (username === 'programmer@officemate.com' && password === 'password') {
                 const mockUser: User = {

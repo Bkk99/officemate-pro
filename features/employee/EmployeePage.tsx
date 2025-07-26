@@ -194,6 +194,7 @@ export const EmployeePage: React.FC = () => {
                 return;
             }
             await addEmployee(currentEmployee as Omit<Employee, 'id'>, password);
+            alert(`สร้างบัญชีสำหรับ ${currentEmployee.email} สำเร็จแล้ว ผู้ใช้ต้องยืนยันอีเมลก่อนจึงจะสามารถเข้าสู่ระบบได้`);
         }
     } catch (error: any) {
         console.error("Failed to save employee:", error);

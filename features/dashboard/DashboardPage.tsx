@@ -1,15 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Card } from '../../components/ui/Card';
 import { Link } from 'react-router-dom';
 import { NAV_ITEMS, DEPARTMENTS, LEAVE_TYPES_TH, ShoppingCartIcon, UsersIcon, CalendarUserIcon } from '../../constants'; 
-import { UserRole, ActivityLog } from '../../types';
+import { UserRole, ActivityLog, PurchaseOrder, Employee, InventoryItem, CalendarEvent } from '../../types';
 import { AnnouncementSettingsModal } from '../admin/AnnouncementSettingsModal';
 import { Button } from '../../components/ui/Button';
-import { getAllPurchaseOrders, getAllLeaveRequests, getAllEmployees } from '../../services/api';
+import { getAllPurchaseOrders, getAllLeaveRequests, getAllEmployees, getInventoryItems, getCalendarEvents } from '../../services/api';
 import { Spinner } from '../../components/ui/Spinner';
 
-// Icons for dashboard cards (simplified)
+const MegaphoneIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.94.897 9.504a1.125 1.125 0 0 0-.527 1.437l4.385 7.8A1.125 1.125 0 0 0 5.85 19.5h12.3a1.125 1.125 0 0 0 .992-1.638l-4.385-7.8a1.125 1.125 0 0 0-1.96-.062L10.34 3.94Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9.75v.01M10.34 3.94v15.06M7.5 15.75H4.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.5h3.75" />
+    </svg>
+  );
+
+const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => ( 
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
+      <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
+      <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
+    </svg>
+);
+
 const UsersIconSolid = (props: React.SVGProps<SVGSVGElement>) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
     <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.095a1.23 1.23 0 00.41-1.412A9.99 9.99 0 0010 12.75a9.99 9.99 0 00-6.535 1.743z" />
@@ -31,28 +45,6 @@ const CalendarDaysIconSolid = (props: React.SVGProps<SVGSVGElement>) => (
 </svg>
 );
 
-const MegaphoneIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.94.897 9.504a1.125 1.125 0 0 0-.527 1.437l4.385 7.8A1.125 1.125 0 0 0 5.85 19.5h12.3a1.125 1.125 0 0 0 .992-1.638l-4.385-7.8a1.125 1.125 0 0 0-1.96-.062L10.34 3.94Z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9.75v.01M10.34 3.94v15.06M7.5 15.75H4.5" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.5h3.75" />
-    </svg>
-  );
-
-const ArrowDownTrayIcon = (props: React.SVGProps<SVGSVGElement>) => ( 
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" {...props}>
-      <path d="M10.75 2.75a.75.75 0 00-1.5 0v8.614L6.295 8.235a.75.75 0 10-1.09 1.03l4.25 4.5a.75.75 0 001.09 0l4.25-4.5a.75.75 0 00-1.09-1.03l-2.955 3.129V2.75z" />
-      <path d="M3.5 12.75a.75.75 0 00-1.5 0v2.5A2.75 2.75 0 004.75 18h10.5A2.75 2.75 0 0018 15.25v-2.5a.75.75 0 00-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5z" />
-    </svg>
-);
-
-
-const quickStats = [
-  { title: 'พนักงานที่ใช้งานอยู่', value: '52', icon: UsersIconSolid, color: 'text-primary-500', bgColor: 'bg-primary-100' },
-  { title: 'สินค้าในสต็อก', value: '1,280', icon: ArchiveBoxIconSolid, color: 'text-green-500', bgColor: 'bg-green-100' },
-  { title: 'PO รอดำเนินการ', value: '12', icon: DocumentTextIconSolid, color: 'text-yellow-500', bgColor: 'bg-yellow-100' },
-  { title: 'การประชุมเร็วๆ นี้', value: '3', icon: CalendarDaysIconSolid, color: 'text-purple-500', bgColor: 'bg-purple-100' },
-];
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -60,6 +52,29 @@ export const DashboardPage: React.FC = () => {
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
   const [recentActivities, setRecentActivities] = useState<ActivityLog[]>([]);
   const [isActivitiesLoading, setIsActivitiesLoading] = useState(true);
+
+  // State for dashboard stats
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  const dashboardStats = useMemo(() => {
+    const activeEmployees = employees.filter(e => e.status === 'Active').length;
+    const stockItems = inventory.reduce((sum, item) => sum + item.quantity, 0);
+    const pendingPOs = purchaseOrders.filter(p => p.status === 'Pending').length;
+    
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const upcomingMeetings = calendarEvents.filter(e => {
+        const startDate = new Date(e.start);
+        return startDate > now && startDate < nextWeek;
+    }).length;
+
+    return { activeEmployees, stockItems, pendingPOs, upcomingMeetings };
+  }, [employees, inventory, purchaseOrders, calendarEvents]);
+
 
   const fetchRecentActivities = useCallback(async () => {
     setIsActivitiesLoading(true);
@@ -96,7 +111,7 @@ export const DashboardPage: React.FC = () => {
 
         const allActivities = [...poActivities, ...leaveActivities, ...employeeActivities]
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-            .slice(0, 5); // Take the 5 most recent activities
+            .slice(0, 5); 
 
         setRecentActivities(allActivities);
 
@@ -107,8 +122,30 @@ export const DashboardPage: React.FC = () => {
     }
   }, []);
 
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoadingStats(true);
+    try {
+        const [empData, poData, invData, eventData] = await Promise.all([
+            getAllEmployees(),
+            getAllPurchaseOrders(),
+            getInventoryItems(), // Get all items, no category filter
+            getCalendarEvents(),
+        ]);
+        setEmployees(empData);
+        setPurchaseOrders(poData);
+        setInventory(invData);
+        setCalendarEvents(eventData);
+    } catch (error) {
+        console.error("Failed to fetch dashboard data", error);
+    } finally {
+        setIsLoadingStats(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchRecentActivities();
+    fetchDashboardData();
+
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setInstallPromptEvent(e);
@@ -117,7 +154,7 @@ export const DashboardPage: React.FC = () => {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [fetchRecentActivities]);
+  }, [fetchRecentActivities, fetchDashboardData]);
 
   if (!user) return null;
 
@@ -135,12 +172,18 @@ export const DashboardPage: React.FC = () => {
   };
 
   const accessibleNavItems = NAV_ITEMS.filter(
-    item => item.allowedRoles.includes(user.role) && item.path !== '/dashboard' && !item.path.startsWith('/admin/') // Exclude settings from quick links here
+    item => item.allowedRoles.includes(user.role) && item.path !== '/dashboard' && !item.path.startsWith('/admin/') 
   );
 
   const canManageAnnouncements = user.role === UserRole.ADMIN || 
                                (user.role === UserRole.MANAGER && user.department === DEPARTMENTS.find(d => d === "ฝ่ายบุคคล"));
 
+  const quickStats = [
+    { title: 'พนักงานที่ใช้งานอยู่', value: dashboardStats.activeEmployees, icon: UsersIconSolid, color: 'text-primary-500', bgColor: 'bg-primary-100' },
+    { title: 'สินค้าในสต็อก (ชิ้น)', value: dashboardStats.stockItems.toLocaleString(), icon: ArchiveBoxIconSolid, color: 'text-green-500', bgColor: 'bg-green-100' },
+    { title: 'PO รอดำเนินการ', value: dashboardStats.pendingPOs, icon: DocumentTextIconSolid, color: 'text-yellow-500', bgColor: 'bg-yellow-100' },
+    { title: 'ประชุมเร็วๆ นี้ (7 วัน)', value: dashboardStats.upcomingMeetings, icon: CalendarDaysIconSolid, color: 'text-purple-500', bgColor: 'bg-purple-100' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -176,10 +219,12 @@ export const DashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {quickStats.map((stat) => (
           <Card key={stat.title} className="!p-0">
-            <div className={`p-5 flex items-center justify-between ${stat.bgColor}`}>
-                <stat.icon className={`h-10 w-10 ${stat.color}`} />
+             <div className={`p-5 flex items-center justify-between`}>
+                <div className={`p-3 rounded-full ${stat.bgColor}`}>
+                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                </div>
                  <div className="text-right">
-                    <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+                    {isLoadingStats ? <Spinner size="sm"/> : <p className="text-2xl font-bold text-gray-800">{stat.value}</p> }
                     <p className="text-sm font-medium text-gray-600">{stat.title}</p>
                 </div>
             </div>
@@ -190,7 +235,7 @@ export const DashboardPage: React.FC = () => {
       <Card title="ทางลัดเข้าใช้งาน">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {accessibleNavItems.map((item) => (
-             !item.subItems && ( // Only show top-level items that are not parents of sub-menus
+             !item.subItems && (
                 <Link
                 key={item.path}
                 to={item.path}
