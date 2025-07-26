@@ -86,7 +86,7 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?:
     };
     
     const snakeCaseProfile: Record<string, any> = convertKeysToSnakeCase(profileData);
-    const { data: profile, error: profileError } = await supabase.from('employees').insert([snakeCaseProfile]).select().single();
+    const { data: profile, error: profileError } = await supabase.from('employees').insert([snakeCaseProfile] as any).select().single();
     handleSupabaseError({ error: profileError, customMessage: 'Failed to create employee profile' });
 
     if (!profile) {
@@ -98,14 +98,14 @@ export const addEmployee = async (employeeData: Omit<Employee, 'id'>, password?:
 
 export const addBulkEmployees = async (newEmployees: Partial<Employee>[]): Promise<void> => {
     const snakeCaseEmployees: Record<string, any>[] = convertKeysToSnakeCase(newEmployees);
-    const { error } = await supabase.from('employees').insert(snakeCaseEmployees);
+    const { error } = await supabase.from('employees').insert(snakeCaseEmployees as any);
     handleSupabaseError({ error, customMessage: 'Failed to bulk insert employees' });
 };
 
 export const updateEmployee = async (updatedEmployee: Employee): Promise<Employee> => {
     const { id, ...updateData } = updatedEmployee;
     const snakeCaseData: Record<string, any> = convertKeysToSnakeCase({ ...updateData, updated_at: new Date().toISOString() });
-    const { data, error } = await supabase.from('employees').update(snakeCaseData).eq('id', id).select().single();
+    const { data, error } = await supabase.from('employees').update(snakeCaseData as any).eq('id', id).select().single();
     handleSupabaseError({ error, customMessage: `Failed to update employee ${id}` });
     if (!data) throw new Error('Update did not return data.');
     return data as Employee;
@@ -138,7 +138,7 @@ const createCrud = <T extends { id: string }>(tableName: string, mockDataArray: 
     },
     add: async (itemData: Omit<T, 'id'>): Promise<T> => {
         const snakeCaseData: Record<string, any> = convertKeysToSnakeCase(itemData);
-        const { data, error } = await supabase.from(tableName).insert([snakeCaseData]).select().single();
+        const { data, error } = await supabase.from(tableName).insert([snakeCaseData] as any).select().single();
         handleSupabaseError({ error, customMessage: `Failed to add to ${tableName}` });
         if (!data) throw new Error(`Add operation on ${tableName} did not return data.`);
         return data as T;
@@ -146,7 +146,7 @@ const createCrud = <T extends { id: string }>(tableName: string, mockDataArray: 
     update: async (updatedItem: T): Promise<T> => {
         const { id, ...updateData } = updatedItem;
         const snakeCaseData: Record<string, any> = convertKeysToSnakeCase(updateData);
-        const { data, error } = await supabase.from(tableName).update(snakeCaseData).eq('id', id).select().single();
+        const { data, error } = await supabase.from(tableName).update(snakeCaseData as any).eq('id', id).select().single();
         handleSupabaseError({ error, customMessage: `Failed to update ${id} in ${tableName}` });
         if (!data) throw new Error(`Update operation on ${tableName} did not return data.`);
         return data as T;
@@ -219,7 +219,7 @@ export const addStockTransaction = async (transactionData: Omit<StockTransaction
         transaction_date: transactionData.date,
         employee_id: transactionData.employeeId,
         employee_name: transactionData.employeeName,
-    });
+    } as any);
     handleSupabaseError({ error, customMessage: 'Failed to add stock transaction via RPC' });
     // Note: RPC might not return the inserted row; this might need adjustment based on RPC definition
     return { ...transactionData, id: `rpc-${Date.now()}` } as StockTransaction; // Mock return
@@ -256,7 +256,7 @@ export const getSetting = async (key: string): Promise<any> => {
     return data ? data.value : null;
 };
 export const saveSetting = async (key: string, value: any): Promise<void> => {
-    const { error } = await supabase.from('settings').upsert({ key, value }, { onConflict: 'key' });
+    const { error } = await supabase.from('settings').upsert({ key, value } as any, { onConflict: 'key' });
     handleSupabaseError({ error, customMessage: `Failed to save setting: ${key}` });
 };
 
@@ -356,6 +356,6 @@ export const getManagedUsers = async (): Promise<ManagedUser[]> => {
 
 export const updateUserRole = async (userId: string, newRole: UserRole): Promise<void> => {
     const snakeCaseData: Record<string, any> = convertKeysToSnakeCase({ role: newRole, updated_at: new Date().toISOString() });
-    const { error } = await supabase.from('employees').update(snakeCaseData).eq('id', userId);
+    const { error } = await supabase.from('employees').update(snakeCaseData as any).eq('id', userId);
     handleSupabaseError({ error, customMessage: `Failed to update role for user ${userId}` });
 };
