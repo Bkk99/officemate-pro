@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "serve -s . -l ${PORT:-8080}",
+    "start": "serve -s dist -l ${PORT:-8080}",
     "build": "esbuild index.tsx --bundle --outfile=dist/bundle.js --jsx=automatic --external:react --external:react-dom/* --external:react/* --external:react-router-dom --external:recharts --external:@google/genai --external:@supabase/supabase-js && cp index.html manifest.json service-worker.js dist/ && (cp *.png dist/ 2>/dev/null || true)"
   },
   "dependencies": {
